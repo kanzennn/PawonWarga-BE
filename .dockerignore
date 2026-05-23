@@ -1,7 +1,6 @@
 .env
 .env.*
 bin/
-docs/
 *.md
 .git/
 .github/
