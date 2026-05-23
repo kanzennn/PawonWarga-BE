@@ -1,0 +1,16 @@
+# environment & secrets
+.env
+.env.*
+
+# build output
+bin/
+*.exe
+*.test
+*.out
+
+# dependencies
+vendor/
+
+# IDE / tooling
+.claude/
+CLAUDE.md

@@ -1,0 +1,57 @@
+services:
+  app:
+    # APP_IMAGE is injected by the deploy workflow.
+    # For a one-off local build: docker compose build app
+    image: ${APP_IMAGE:-pawonwarga-be:latest}
+    container_name: pawonwarga-app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+
+  db:
+    image: timescale/timescaledb:latest-pg16
+    container_name: pawonwarga-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-pawonwarga}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  redis:
+    image: redis:7-alpine
+    container_name: pawonwarga-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+volumes:
+  db_data:
+  redis_data:
+
+networks:
+  internal:
+    driver: bridge
