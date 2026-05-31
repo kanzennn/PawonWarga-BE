@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	_ "PawonWarga-BE/docs" // swagger docs — regenerate with: swag init
+	"PawonWarga-BE/docs"
 	"PawonWarga-BE/internal/config"
 	"PawonWarga-BE/internal/server"
 )
@@ -23,6 +23,7 @@ import (
 // @description                Enter: Bearer {token}
 func main() {
 	cfg := config.Load()
+	docs.SwaggerInfo.Host = cfg.Server.SwaggerHost
 
 	srv, err := server.New(cfg)
 	if err != nil {
