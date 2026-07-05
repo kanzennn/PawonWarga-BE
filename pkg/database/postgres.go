@@ -11,10 +11,18 @@ import (
 )
 
 func NewPostgres(cfg *config.DatabaseConfig) (*gorm.DB, error) {
+	// password is appended separately, and only when non-empty: an empty
+	// unquoted "password=" token in a space-separated DSN can make pgx's
+	// parser swallow the fields after it (dbname, sslmode, ...), silently
+	// dropping dbname and causing Postgres to fall back to using the
+	// username as the database name.
 	dsn := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s TimeZone=Asia/Jakarta",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Name, cfg.SSLMode,
+		"host=%s port=%s user=%s dbname=%s sslmode=%s TimeZone=Asia/Jakarta",
+		cfg.Host, cfg.Port, cfg.User, cfg.Name, cfg.SSLMode,
 	)
+	if cfg.Password != "" {
+		dsn += fmt.Sprintf(" password=%s", cfg.Password)
+	}
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
