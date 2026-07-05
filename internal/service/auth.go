@@ -33,12 +33,21 @@ type UpdateProfileInput struct {
 	Name string
 }
 
+// UserView is the API-facing shape of a User: identical to model.User except
+// ProfilePicture is resolved to a full URL from the stored key. It's computed
+// on every response, not persisted, so it always reflects whichever storage
+// provider is configured right now.
+type UserView struct {
+	*model.User
+	ProfilePicture *string `json:"profile_picture"`
+}
+
 type AuthService interface {
-	Register(ctx context.Context, input RegisterInput) (*model.User, error)
-	Login(ctx context.Context, email, password string) (token string, user *model.User, err error)
-	GetProfile(ctx context.Context, userID uint) (*model.User, error)
-	UpdateProfile(ctx context.Context, userID uint, input UpdateProfileInput) (*model.User, error)
-	UploadProfilePicture(ctx context.Context, userID uint, filename string, body io.Reader, size int64, contentType string) (*model.User, error)
+	Register(ctx context.Context, input RegisterInput) (*UserView, error)
+	Login(ctx context.Context, email, password string) (token string, user *UserView, err error)
+	GetProfile(ctx context.Context, userID uint) (*UserView, error)
+	UpdateProfile(ctx context.Context, userID uint, input UpdateProfileInput) (*UserView, error)
+	UploadProfilePicture(ctx context.Context, userID uint, filename string, body io.Reader, size int64, contentType string) (*UserView, error)
 }
 
 type authService struct {
@@ -57,7 +66,16 @@ func NewAuthService(userRepo repository.UserRepository, stor storage.Storage, jw
 	}
 }
 
-func (s *authService) Register(ctx context.Context, input RegisterInput) (*model.User, error) {
+func (s *authService) toView(user *model.User) *UserView {
+	view := &UserView{User: user}
+	if user.ProfilePicture != nil && s.storage != nil {
+		url := s.storage.PublicURL(*user.ProfilePicture)
+		view.ProfilePicture = &url
+	}
+	return view
+}
+
+func (s *authService) Register(ctx context.Context, input RegisterInput) (*UserView, error) {
 	existing, err := s.userRepo.FindByEmail(ctx, input.Email)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
@@ -75,10 +93,10 @@ func (s *authService) Register(ctx context.Context, input RegisterInput) (*model
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		return nil, err
 	}
-	return user, nil
+	return s.toView(user), nil
 }
 
-func (s *authService) Login(ctx context.Context, email, password string) (string, *model.User, error) {
+func (s *authService) Login(ctx context.Context, email, password string) (string, *UserView, error) {
 	user, err := s.userRepo.FindByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -95,10 +113,10 @@ func (s *authService) Login(ctx context.Context, email, password string) (string
 	if err != nil {
 		return "", nil, err
 	}
-	return token, user, nil
+	return token, s.toView(user), nil
 }
 
-func (s *authService) GetProfile(ctx context.Context, userID uint) (*model.User, error) {
+func (s *authService) GetProfile(ctx context.Context, userID uint) (*UserView, error) {
 	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -106,10 +124,10 @@ func (s *authService) GetProfile(ctx context.Context, userID uint) (*model.User,
 		}
 		return nil, err
 	}
-	return user, nil
+	return s.toView(user), nil
 }
 
-func (s *authService) UpdateProfile(ctx context.Context, userID uint, input UpdateProfileInput) (*model.User, error) {
+func (s *authService) UpdateProfile(ctx context.Context, userID uint, input UpdateProfileInput) (*UserView, error) {
 	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -122,10 +140,10 @@ func (s *authService) UpdateProfile(ctx context.Context, userID uint, input Upda
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, err
 	}
-	return user, nil
+	return s.toView(user), nil
 }
 
-func (s *authService) UploadProfilePicture(ctx context.Context, userID uint, filename string, body io.Reader, size int64, contentType string) (*model.User, error) {
+func (s *authService) UploadProfilePicture(ctx context.Context, userID uint, filename string, body io.Reader, size int64, contentType string) (*UserView, error) {
 	if s.storage == nil {
 		return nil, ErrStorageNotConfigured
 	}
@@ -138,9 +156,10 @@ func (s *authService) UploadProfilePicture(ctx context.Context, userID uint, fil
 		return nil, err
 	}
 
-	// Delete previous picture before uploading the new one (best effort)
-	if user.ProfilePictureKey != nil {
-		_ = s.storage.Delete(ctx, *user.ProfilePictureKey)
+	// Delete previous picture before uploading the new one (best effort).
+	// ProfilePicture stores the storage key directly, so no separate "key" field is needed.
+	if user.ProfilePicture != nil {
+		_ = s.storage.Delete(ctx, *user.ProfilePicture)
 	}
 
 	key, err := generateKey(userID, filename)
@@ -148,22 +167,20 @@ func (s *authService) UploadProfilePicture(ctx context.Context, userID uint, fil
 		return nil, err
 	}
 
-	url, err := s.storage.Upload(ctx, storage.UploadInput{
+	if err := s.storage.Upload(ctx, storage.UploadInput{
 		Key:         key,
 		Body:        body,
 		Size:        size,
 		ContentType: contentType,
-	})
-	if err != nil {
+	}); err != nil {
 		return nil, err
 	}
 
-	user.ProfilePicture = &url
-	user.ProfilePictureKey = &key
+	user.ProfilePicture = &key
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, err
 	}
-	return user, nil
+	return s.toView(user), nil
 }
 
 // generateKey produces a unique, collision-resistant S3 key for a profile picture.
