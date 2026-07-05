@@ -1,5 +1,16 @@
 basePath: /api/v1
 definitions:
+  handler.ChangePasswordRequest:
+    properties:
+      current_password:
+        type: string
+      new_password:
+        minLength: 8
+        type: string
+    required:
+    - current_password
+    - new_password
+    type: object
   handler.LoginRequest:
     properties:
       email:
@@ -19,17 +30,27 @@ definitions:
       password:
         minLength: 8
         type: string
+      phone_number:
+        maxLength: 20
+        minLength: 8
+        type: string
     required:
     - email
     - name
     - password
+    - phone_number
     type: object
   handler.UpdateProfileRequest:
     properties:
       name:
         type: string
+      phone_number:
+        maxLength: 20
+        minLength: 8
+        type: string
     required:
     - name
+    - phone_number
     type: object
   response.ErrorResponse:
     properties:
@@ -39,6 +60,27 @@ definitions:
         type: string
       success:
         type: boolean
+    type: object
+  response.PaginatedResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+      pagination:
+        $ref: '#/definitions/response.Pagination'
+      success:
+        type: boolean
+    type: object
+  response.Pagination:
+    properties:
+      page:
+        type: integer
+      per_page:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
     type: object
   response.Response:
     properties:
@@ -59,7 +101,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Authenticate with email and password, returns a JWT Bearer token
+      description: Authenticate with email and password, returns a JWT Bearer token.
+        Response messages are localized via ?lang= or Accept-Language (id/en).
       parameters:
       - description: Login credentials
         in: body
@@ -85,9 +128,65 @@ paths:
       summary: Login
       tags:
       - auth
+  /auth/logout-all:
+    post:
+      description: Invalidates every JWT issued before now for this user, including
+        the one used to call this endpoint — the client should discard its token and
+        redirect to login. Response messages are localized via ?lang= or Accept-Language
+        (id/en).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Log out of all devices
+      tags:
+      - auth
+  /auth/password:
+    put:
+      consumes:
+      - application/json
+      description: Changes the authenticated user's password after verifying the current
+        one. Response messages are localized via ?lang= or Accept-Language (id/en).
+      parameters:
+      - description: Current and new password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Current password is incorrect
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change password
+      tags:
+      - auth
   /auth/profile:
     get:
-      description: Returns the authenticated user's profile
+      description: Returns the authenticated user's profile. Response messages are
+        localized via ?lang= or Accept-Language (id/en).
       produces:
       - application/json
       responses:
@@ -111,7 +210,8 @@ paths:
     put:
       consumes:
       - application/json
-      description: Updates the authenticated user's profile name
+      description: Updates the authenticated user's profile name and phone number.
+        Response messages are localized via ?lang= or Accept-Language (id/en).
       parameters:
       - description: Profile update payload
         in: body
@@ -148,7 +248,8 @@ paths:
       consumes:
       - multipart/form-data
       description: Uploads a profile picture (jpg, png, or webp — max 5 MB). Replaces
-        any existing picture.
+        any existing picture. Response messages are localized via ?lang= or Accept-Language
+        (id/en).
       parameters:
       - description: Profile picture file
         in: formData
@@ -183,7 +284,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Create a new user account with name, email, and password
+      description: Create a new user account with name, email, and password. Response
+        messages are localized via ?lang= or Accept-Language (id/en).
       parameters:
       - description: Registration payload
         in: body
@@ -224,6 +326,80 @@ paths:
       summary: Health check
       tags:
       - system
+  /mentions/posts:
+    get:
+      description: Lists crawled, sentiment-labeled posts with optional filters. Sentiment
+        is null until the nightly labeling worker processes a post. Response messages
+        are localized via ?lang= or Accept-Language (id/en).
+      parameters:
+      - description: Filter by platform (x, instagram, tiktok, youtube, news)
+        in: query
+        name: platform
+        type: string
+      - description: Filter by sentiment (positive, negative, neutral)
+        in: query
+        name: sentiment
+        type: string
+      - description: Filter by category
+        in: query
+        name: category
+        type: string
+      - description: Free-text search in content/author
+        in: query
+        name: q
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.PaginatedResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List posts
+      tags:
+      - mentions
+  /mentions/posts/{id}:
+    get:
+      description: Returns a single post with its comments. Response messages are
+        localized via ?lang= or Accept-Language (id/en).
+      parameters:
+      - description: Post ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get post detail
+      tags:
+      - mentions
 securityDefinitions:
   BasicAuth:
     type: basic
