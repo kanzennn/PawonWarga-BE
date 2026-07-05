@@ -29,8 +29,15 @@ func New(cfg *config.Config) (*Server, error) {
 		return nil, fmt.Errorf("database: %w", err)
 	}
 
-	if err := db.AutoMigrate(&model.User{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.Post{}, &model.Comment{}); err != nil {
 		return nil, fmt.Errorf("migration: %w", err)
+	}
+
+	if err := database.EnsureHypertables(db, map[string]string{
+		"posts":    "published_at",
+		"comments": "published_at",
+	}); err != nil {
+		return nil, fmt.Errorf("hypertables: %w", err)
 	}
 
 	var cacheClient *cache.Cache

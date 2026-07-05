@@ -17,12 +17,13 @@ import (
 )
 
 type Router struct {
-	engine      *gin.Engine
-	cfg         *config.Config
-	db          *gorm.DB
-	cache       *cache.Cache
-	userRepo    repository.UserRepository
-	authHandler *handler.AuthHandler
+	engine         *gin.Engine
+	cfg            *config.Config
+	db             *gorm.DB
+	cache          *cache.Cache
+	userRepo       repository.UserRepository
+	authHandler    *handler.AuthHandler
+	mentionHandler *handler.MentionHandler
 }
 
 func New(cfg *config.Config, db *gorm.DB, cacheClient *cache.Cache, stor storage.Storage) *Router {
@@ -45,13 +46,18 @@ func New(cfg *config.Config, db *gorm.DB, cacheClient *cache.Cache, stor storage
 	userRepo := repository.NewUserRepository(db)
 	authSvc := service.NewAuthService(userRepo, stor, cfg.JWT.Secret, cfg.JWT.ExpiryHours)
 
+	postRepo := repository.NewPostRepository(db)
+	commentRepo := repository.NewCommentRepository(db)
+	mentionSvc := service.NewMentionService(postRepo, commentRepo)
+
 	return &Router{
-		engine:      engine,
-		cfg:         cfg,
-		db:          db,
-		cache:       cacheClient,
-		userRepo:    userRepo,
-		authHandler: handler.NewAuthHandler(authSvc),
+		engine:         engine,
+		cfg:            cfg,
+		db:             db,
+		cache:          cacheClient,
+		userRepo:       userRepo,
+		authHandler:    handler.NewAuthHandler(authSvc),
+		mentionHandler: handler.NewMentionHandler(mentionSvc),
 	}
 }
 
@@ -78,6 +84,14 @@ func (r *Router) Setup() *gin.Engine {
 		user.POST("/profile/picture", r.authHandler.UploadProfilePicture)
 		user.PUT("/password", r.authHandler.ChangePassword)
 		user.POST("/logout-all", r.authHandler.LogoutAllDevices)
+	}
+
+	// Mention routes — JWT required (analyst-facing dashboard data)
+	mentions := r.engine.Group("/api/v1/mentions")
+	mentions.Use(middleware.JWTAuth(r.cfg.JWT.Secret, r.userRepo))
+	{
+		mentions.GET("/posts", r.mentionHandler.List)
+		mentions.GET("/posts/:id", r.mentionHandler.GetByID)
 	}
 
 	// Other API routes — Basic Auth required
