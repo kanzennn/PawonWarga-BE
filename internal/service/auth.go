@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"time"
 
 	"PawonWarga-BE/internal/model"
 	"PawonWarga-BE/internal/repository"
@@ -21,16 +22,19 @@ var (
 	ErrInvalidCreds         = errors.New("invalid email or password")
 	ErrUserNotFound         = errors.New("user not found")
 	ErrStorageNotConfigured = errors.New("file storage is not configured")
+	ErrIncorrectPassword    = errors.New("current password is incorrect")
 )
 
 type RegisterInput struct {
-	Name     string
-	Email    string
-	Password string
+	Name        string
+	Email       string
+	Password    string
+	PhoneNumber string
 }
 
 type UpdateProfileInput struct {
-	Name string
+	Name        string
+	PhoneNumber string
 }
 
 // UserView is the API-facing shape of a User: identical to model.User except
@@ -48,6 +52,10 @@ type AuthService interface {
 	GetProfile(ctx context.Context, userID uint) (*UserView, error)
 	UpdateProfile(ctx context.Context, userID uint, input UpdateProfileInput) (*UserView, error)
 	UploadProfilePicture(ctx context.Context, userID uint, filename string, body io.Reader, size int64, contentType string) (*UserView, error)
+	ChangePassword(ctx context.Context, userID uint, currentPassword, newPassword string) error
+	// LogoutAllDevices invalidates every JWT issued before now (including the
+	// one used to call this endpoint) — see model.User.TokenValidAfter.
+	LogoutAllDevices(ctx context.Context, userID uint) error
 }
 
 type authService struct {
@@ -89,7 +97,7 @@ func (s *authService) Register(ctx context.Context, input RegisterInput) (*UserV
 		return nil, err
 	}
 
-	user := &model.User{Name: input.Name, Email: input.Email, Password: string(hashed)}
+	user := &model.User{Name: input.Name, Email: input.Email, Password: string(hashed), PhoneNumber: &input.PhoneNumber}
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		return nil, err
 	}
@@ -137,6 +145,7 @@ func (s *authService) UpdateProfile(ctx context.Context, userID uint, input Upda
 	}
 
 	user.Name = input.Name
+	user.PhoneNumber = &input.PhoneNumber
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, err
 	}
@@ -181,6 +190,42 @@ func (s *authService) UploadProfilePicture(ctx context.Context, userID uint, fil
 		return nil, err
 	}
 	return s.toView(user), nil
+}
+
+func (s *authService) ChangePassword(ctx context.Context, userID uint, currentPassword, newPassword string) error {
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrUserNotFound
+		}
+		return err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(currentPassword)); err != nil {
+		return ErrIncorrectPassword
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	user.Password = string(hashed)
+	return s.userRepo.Update(ctx, user)
+}
+
+func (s *authService) LogoutAllDevices(ctx context.Context, userID uint) error {
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrUserNotFound
+		}
+		return err
+	}
+
+	now := time.Now()
+	user.TokenValidAfter = &now
+	return s.userRepo.Update(ctx, user)
 }
 
 // generateKey produces a unique, collision-resistant S3 key for a profile picture.

@@ -23,7 +23,10 @@ func GenerateToken(userID uint, secret string, expiryHours int) (string, error) 
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, c).SignedString([]byte(secret))
 }
 
-func ParseToken(tokenStr, secret string) (uint, error) {
+// ParseToken returns the token's user ID and IssuedAt time — the latter is
+// needed by middleware.JWTAuth to support "log out of all devices" (see
+// model.User.TokenValidAfter).
+func ParseToken(tokenStr, secret string) (uint, time.Time, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &claims{}, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
@@ -31,12 +34,17 @@ func ParseToken(tokenStr, secret string) (uint, error) {
 		return []byte(secret), nil
 	})
 	if err != nil || !token.Valid {
-		return 0, fmt.Errorf("invalid token")
+		return 0, time.Time{}, fmt.Errorf("invalid token")
 	}
 
 	c, ok := token.Claims.(*claims)
 	if !ok {
-		return 0, fmt.Errorf("invalid claims")
+		return 0, time.Time{}, fmt.Errorf("invalid claims")
 	}
-	return c.UserID, nil
+
+	var issuedAt time.Time
+	if c.IssuedAt != nil {
+		issuedAt = c.IssuedAt.Time
+	}
+	return c.UserID, issuedAt, nil
 }

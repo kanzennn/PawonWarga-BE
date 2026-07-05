@@ -7,6 +7,7 @@ import (
 	"PawonWarga-BE/internal/repository"
 	"PawonWarga-BE/internal/service"
 	"PawonWarga-BE/pkg/cache"
+	"PawonWarga-BE/pkg/i18n"
 	"PawonWarga-BE/pkg/storage"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -20,6 +21,7 @@ type Router struct {
 	cfg         *config.Config
 	db          *gorm.DB
 	cache       *cache.Cache
+	userRepo    repository.UserRepository
 	authHandler *handler.AuthHandler
 }
 
@@ -29,6 +31,9 @@ func New(cfg *config.Config, db *gorm.DB, cacheClient *cache.Cache, stor storage
 	engine := gin.New()
 	engine.Use(middleware.Logger())
 	engine.Use(gin.Recovery())
+	// Resolves ?lang= or Accept-Language into the request context so
+	// pkg/response and handlers can localize messages (id/en).
+	engine.Use(i18n.Middleware())
 	engine.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
@@ -45,6 +50,7 @@ func New(cfg *config.Config, db *gorm.DB, cacheClient *cache.Cache, stor storage
 		cfg:         cfg,
 		db:          db,
 		cache:       cacheClient,
+		userRepo:    userRepo,
 		authHandler: handler.NewAuthHandler(authSvc),
 	}
 }
@@ -65,11 +71,13 @@ func (r *Router) Setup() *gin.Engine {
 
 	// User routes — JWT required
 	user := r.engine.Group("/api/v1/auth")
-	user.Use(middleware.JWTAuth(r.cfg.JWT.Secret))
+	user.Use(middleware.JWTAuth(r.cfg.JWT.Secret, r.userRepo))
 	{
 		user.GET("/profile", r.authHandler.GetProfile)
 		user.PUT("/profile", r.authHandler.UpdateProfile)
 		user.POST("/profile/picture", r.authHandler.UploadProfilePicture)
+		user.PUT("/password", r.authHandler.ChangePassword)
+		user.POST("/logout-all", r.authHandler.LogoutAllDevices)
 	}
 
 	// Other API routes — Basic Auth required
