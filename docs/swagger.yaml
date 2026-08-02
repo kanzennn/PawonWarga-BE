@@ -11,6 +11,101 @@ definitions:
     - current_password
     - new_password
     type: object
+  handler.IngestCommentRequest:
+    properties:
+      author_handle:
+        type: string
+      content:
+        description: |-
+          Content is not required — a comment can legitimately have no text
+          (sticker/image-only comment).
+        type: string
+      like_count:
+        type: integer
+      model_version:
+        type: string
+      platform_comment_id:
+        type: string
+      published_at:
+        type: string
+      raw_payload:
+        items:
+          type: integer
+        type: array
+      sentiment:
+        allOf:
+        - $ref: '#/definitions/model.Sentiment'
+        enum:
+        - positive
+        - negative
+        - neutral
+      sentiment_score:
+        type: number
+    required:
+    - platform_comment_id
+    - published_at
+    type: object
+  handler.IngestPostRequest:
+    properties:
+      author_handle:
+        type: string
+      author_name:
+        type: string
+      comment_count:
+        type: integer
+      comments:
+        items:
+          $ref: '#/definitions/handler.IngestCommentRequest'
+        type: array
+      content:
+        description: |-
+          Content is not required — a post can legitimately have no caption
+          (video/image-only post).
+        type: string
+      crawled_at:
+        type: string
+      like_count:
+        type: integer
+      model_version:
+        type: string
+      platform:
+        allOf:
+        - $ref: '#/definitions/model.Platform'
+        enum:
+        - x
+        - instagram
+        - tiktok
+        - youtube
+        - news
+      platform_post_id:
+        type: string
+      published_at:
+        type: string
+      raw_payload:
+        items:
+          type: integer
+        type: array
+      sentiment:
+        allOf:
+        - $ref: '#/definitions/model.Sentiment'
+        enum:
+        - positive
+        - negative
+        - neutral
+      sentiment_score:
+        type: number
+      share_count:
+        type: integer
+      url:
+        type: string
+      view_count:
+        type: integer
+    required:
+    - crawled_at
+    - platform
+    - platform_post_id
+    - published_at
+    type: object
   handler.LoginRequest:
     properties:
       email:
@@ -52,6 +147,30 @@ definitions:
     - name
     - phone_number
     type: object
+  model.Platform:
+    enum:
+    - x
+    - instagram
+    - tiktok
+    - youtube
+    - news
+    type: string
+    x-enum-varnames:
+    - PlatformX
+    - PlatformInstagram
+    - PlatformTikTok
+    - PlatformYouTube
+    - PlatformNews
+  model.Sentiment:
+    enum:
+    - positive
+    - negative
+    - neutral
+    type: string
+    x-enum-varnames:
+    - SentimentPositive
+    - SentimentNegative
+    - SentimentNeutral
   response.ErrorResponse:
     properties:
       error:
@@ -60,27 +179,6 @@ definitions:
         type: string
       success:
         type: boolean
-    type: object
-  response.PaginatedResponse:
-    properties:
-      data: {}
-      message:
-        type: string
-      pagination:
-        $ref: '#/definitions/response.Pagination'
-      success:
-        type: boolean
-    type: object
-  response.Pagination:
-    properties:
-      page:
-        type: integer
-      per_page:
-        type: integer
-      total:
-        type: integer
-      total_pages:
-        type: integer
     type: object
   response.Response:
     properties:
@@ -311,6 +409,42 @@ paths:
       summary: Register a new user
       tags:
       - auth
+  /dashboard/overview:
+    get:
+      description: 'Aggregated stats backing the main dashboard: headline, summary
+        metrics, sentiment trend, per-platform volume, top keywords, topic distribution,
+        and top sentiment drivers all combine posts AND comments (see repository.PostRepository''s
+        Combined* methods) — unlike /mentions, which is post-only. recent_mentions
+        is the one exception and stays post-only (a bare comment has no url/location/category
+        of its own). topic_distribution/keyword_cloud/drivers are keyword-matched,
+        not a stored classification — see service.ClassifyTopics/computeDrivers. summary.*.change
+        is always "-" — period-over-period comparison isn''t implemented. Response
+        messages are localized via ?lang= or Accept-Language (id/en).'
+      parameters:
+      - description: Start date (YYYY-MM-DD, WIB) — omit for no lower bound
+        in: query
+        name: from
+        type: string
+      - description: End date (YYYY-MM-DD, WIB, inclusive) — omit for no upper bound
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Dashboard overview
+      tags:
+      - dashboard
   /health:
     get:
       description: Returns the service health status
@@ -326,27 +460,108 @@ paths:
       summary: Health check
       tags:
       - system
-  /mentions/posts:
-    get:
-      description: Lists crawled, sentiment-labeled posts with optional filters. Sentiment
-        is null until the nightly labeling worker processes a post. Response messages
-        are localized via ?lang= or Accept-Language (id/en).
+  /ingest/posts:
+    post:
+      consumes:
+      - application/json
+      description: Internal endpoint for the Python sentiment-labeling worker. Upserts
+        by (platform, platform_post_id, published_at); re-ingesting an existing post
+        refreshes engagement counters but never overwrites an already-set sentiment.
+        Response messages are localized via ?lang= or Accept-Language (id/en).
       parameters:
-      - description: Filter by platform (x, instagram, tiktok, youtube, news)
+      - description: Post + comments payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.IngestPostRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Ingest a crawled (optionally labeled) post with its comments
+      tags:
+      - ingest
+  /keywords:
+    get:
+      description: Top keywords extracted from posts+comments (see service.ExtractKeywordStats),
+        with q/sentiment filtering the already-extracted list rather than re-running
+        extraction. growth is always "-" and alerts is always empty — both need a
+        period-over-period comparison the ingested data (currently ~4 days) can't
+        yet support meaningfully. stats.* reflect the whole tracked set, not just
+        the filtered items. Response messages are localized via ?lang= or Accept-Language
+        (id/en).
+      parameters:
+      - description: Free-text filter on keyword text
         in: query
-        name: platform
+        name: q
         type: string
-      - description: Filter by sentiment (positive, negative, neutral)
+      - description: positive, negative, neutral, or \
         in: query
         name: sentiment
         type: string
-      - description: Filter by category
+      - description: Start date (YYYY-MM-DD, WIB) — omit for no lower bound
         in: query
-        name: category
+        name: from
         type: string
+      - description: End date (YYYY-MM-DD, WIB, inclusive) — omit for no upper bound
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List tracked keywords
+      tags:
+      - keywords
+  /mentions:
+    get:
+      description: Lists sentiment-labeled posts for the monitoring dashboard, with
+        metrics and per-platform volume aggregated over the whole filtered set. Response
+        messages are localized via ?lang= or Accept-Language (id/en).
+      parameters:
       - description: Free-text search in content/author
         in: query
         name: q
+        type: string
+      - description: X, Instagram, TikTok, News, YouTube, or \
+        in: query
+        name: platform
+        type: string
+      - description: positive, negative, neutral, or \
+        in: query
+        name: sentiment
+        type: string
+      - description: Start date (YYYY-MM-DD, WIB) — omit for no lower bound
+        in: query
+        name: from
+        type: string
+      - description: End date (YYYY-MM-DD, WIB, inclusive) — omit for no upper bound
+        in: query
+        name: to
         type: string
       - default: 1
         description: Page number
@@ -364,20 +579,21 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/response.PaginatedResponse'
+            $ref: '#/definitions/response.Response'
         "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: List posts
+      summary: List mentions
       tags:
       - mentions
-  /mentions/posts/{id}:
+  /mentions/{id}:
     get:
-      description: Returns a single post with its comments. Response messages are
-        localized via ?lang= or Accept-Language (id/en).
+      description: Returns a single sentiment-labeled mention. 404s if the post exists
+        but hasn't been labeled yet. Response messages are localized via ?lang= or
+        Accept-Language (id/en).
       parameters:
       - description: Post ID
         in: path
@@ -397,10 +613,50 @@ paths:
             $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Get post detail
+      summary: Get mention detail
       tags:
       - mentions
+  /sentiment/overview:
+    get:
+      description: 'Aggregated sentiment stats backing the Sentiment Analysis page:
+        score, summary metrics, distribution, trend, per-platform and per-category
+        breakdowns. Combines posts AND comments (see repository.PostRepository''s
+        Combined* methods), like /dashboard/overview — unlike /mentions, which is
+        post-only. by_category is keyword-matched (service.ClassifyTopicSentiment),
+        not a stored classification. summary.*.change is always "-" — period-over-period
+        comparison isn''t implemented. Response messages are localized via ?lang=
+        or Accept-Language (id/en).'
+      parameters:
+      - description: Start date (YYYY-MM-DD, WIB) — omit for no lower bound
+        in: query
+        name: from
+        type: string
+      - description: End date (YYYY-MM-DD, WIB, inclusive) — omit for no upper bound
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Sentiment overview
+      tags:
+      - sentiment
 securityDefinitions:
+  ApiKeyAuth:
+    description: Shared secret for the internal ingest routes (Python labeling worker)
+    in: header
+    name: X-API-Key
+    type: apiKey
   BasicAuth:
     type: basic
   BearerAuth:

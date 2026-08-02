@@ -9,11 +9,27 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// CommentFilter mirrors the PostFilter dimensions that make sense for
+// comments — used to keep /mentions' "total_comments" metric consistent
+// with whatever platform/sentiment/query filter is currently applied to
+// the post list. Platform requires a join since Comment has no platform
+// column of its own (see CountFiltered).
+type CommentFilter struct {
+	Platform  string
+	Sentiment string
+	Query     string
+	From      *time.Time
+	To        *time.Time
+}
+
 type CommentRepository interface {
 	// Upsert inserts a comment or, if (post_id, platform_comment_id) already exists,
 	// refreshes fields that change on re-crawl. Never touches sentiment fields.
 	Upsert(ctx context.Context, comment *model.Comment) error
 	ListByPostID(ctx context.Context, postID uint) ([]model.Comment, error)
+	// CountFiltered returns the number of labeled comments matching filter,
+	// joined to their parent post for the platform dimension.
+	CountFiltered(ctx context.Context, filter CommentFilter) (int64, error)
 	FindUnlabeled(ctx context.Context, limit int) ([]model.Comment, error)
 	UpdateSentiment(ctx context.Context, id uint, sentiment model.Sentiment, score float32, modelVersion string) error
 }
@@ -47,6 +63,34 @@ func (r *commentRepository) ListByPostID(ctx context.Context, postID uint) ([]mo
 		Order("published_at ASC").
 		Find(&comments).Error
 	return comments, err
+}
+
+func (r *commentRepository) CountFiltered(ctx context.Context, filter CommentFilter) (int64, error) {
+	query := r.db.WithContext(ctx).
+		Table("comments AS c").
+		Joins("JOIN posts p ON p.id = c.post_id").
+		Where("c.sentiment IS NOT NULL")
+
+	if filter.Platform != "" {
+		query = query.Where("p.platform = ?", filter.Platform)
+	}
+	if filter.Sentiment != "" {
+		query = query.Where("c.sentiment = ?", filter.Sentiment)
+	}
+	if filter.Query != "" {
+		like := "%" + filter.Query + "%"
+		query = query.Where("c.content ILIKE ? OR c.author_handle ILIKE ?", like, like)
+	}
+	if filter.From != nil {
+		query = query.Where("c.published_at >= ?", *filter.From)
+	}
+	if filter.To != nil {
+		query = query.Where("c.published_at <= ?", *filter.To)
+	}
+
+	var count int64
+	err := query.Count(&count).Error
+	return count, err
 }
 
 func (r *commentRepository) FindUnlabeled(ctx context.Context, limit int) ([]model.Comment, error) {

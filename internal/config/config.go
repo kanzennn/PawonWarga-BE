@@ -15,6 +15,7 @@ type Config struct {
 	Auth     AuthConfig
 	JWT      JWTConfig
 	Storage  StorageConfig
+	Ingest   IngestConfig
 }
 
 type ServerConfig struct {
@@ -53,6 +54,13 @@ type AuthConfig struct {
 type JWTConfig struct {
 	Secret      string
 	ExpiryHours int
+}
+
+// IngestConfig guards the internal ingest routes (see internal/handler/ingest.go)
+// used by the Python sentiment-labeling worker — a single shared secret sent
+// via the X-API-Key header, not the Basic Auth used by human/admin routes.
+type IngestConfig struct {
+	APIKey string
 }
 
 type StorageConfig struct {
@@ -103,6 +111,9 @@ func Load() *Config {
 		JWT: JWTConfig{
 			Secret:      getEnv("JWT_SECRET", "change-this-secret-in-production"),
 			ExpiryHours: getEnvInt("JWT_EXPIRY_HOURS", 24),
+		},
+		Ingest: IngestConfig{
+			APIKey: getEnv("INGEST_API_KEY", "change-this-ingest-api-key"),
 		},
 		Storage: StorageConfig{
 			Endpoint:        getEnv("STORAGE_ENDPOINT", ""),

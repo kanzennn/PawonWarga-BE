@@ -330,6 +330,51 @@
                 }
             }
         },
+        "/dashboard/overview": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Aggregated stats backing the main dashboard: headline, summary metrics, sentiment trend, per-platform volume, top keywords, topic distribution, and top sentiment drivers all combine posts AND comments (see repository.PostRepository's Combined* methods) — unlike /mentions, which is post-only. recent_mentions is the one exception and stays post-only (a bare comment has no url/location/category of its own). topic_distribution/keyword_cloud/drivers are keyword-matched, not a stored classification — see service.ClassifyTopics/computeDrivers. summary.*.change is always \"-\" — period-over-period comparison isn't implemented. Response messages are localized via ?lang= or Accept-Language (id/en).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "dashboard"
+                ],
+                "summary": "Dashboard overview",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD, WIB) — omit for no lower bound",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD, WIB, inclusive) — omit for no upper bound",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "Returns the service health status",
@@ -353,44 +398,158 @@
                 }
             }
         },
-        "/mentions/posts": {
+        "/ingest/posts": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Internal endpoint for the Python sentiment-labeling worker. Upserts by (platform, platform_post_id, published_at); re-ingesting an existing post refreshes engagement counters but never overwrites an already-set sentiment. Response messages are localized via ?lang= or Accept-Language (id/en).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ingest"
+                ],
+                "summary": "Ingest a crawled (optionally labeled) post with its comments",
+                "parameters": [
+                    {
+                        "description": "Post + comments payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.IngestPostRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/keywords": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Lists crawled, sentiment-labeled posts with optional filters. Sentiment is null until the nightly labeling worker processes a post. Response messages are localized via ?lang= or Accept-Language (id/en).",
+                "description": "Top keywords extracted from posts+comments (see service.ExtractKeywordStats), with q/sentiment filtering the already-extracted list rather than re-running extraction. growth is always \"-\" and alerts is always empty — both need a period-over-period comparison the ingested data (currently ~4 days) can't yet support meaningfully. stats.* reflect the whole tracked set, not just the filtered items. Response messages are localized via ?lang= or Accept-Language (id/en).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "keywords"
+                ],
+                "summary": "List tracked keywords",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Free-text filter on keyword text",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "positive, negative, neutral, or \\",
+                        "name": "sentiment",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD, WIB) — omit for no lower bound",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD, WIB, inclusive) — omit for no upper bound",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/mentions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lists sentiment-labeled posts for the monitoring dashboard, with metrics and per-platform volume aggregated over the whole filtered set. Response messages are localized via ?lang= or Accept-Language (id/en).",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "mentions"
                 ],
-                "summary": "List posts",
+                "summary": "List mentions",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Filter by platform (x, instagram, tiktok, youtube, news)",
+                        "description": "Free-text search in content/author",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "X, Instagram, TikTok, News, YouTube, or \\",
                         "name": "platform",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Filter by sentiment (positive, negative, neutral)",
+                        "description": "positive, negative, neutral, or \\",
                         "name": "sentiment",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Filter by category",
-                        "name": "category",
+                        "description": "Start date (YYYY-MM-DD, WIB) — omit for no lower bound",
+                        "name": "from",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Free-text search in content/author",
-                        "name": "q",
+                        "description": "End date (YYYY-MM-DD, WIB, inclusive) — omit for no upper bound",
+                        "name": "to",
                         "in": "query"
                     },
                     {
@@ -412,7 +571,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/response.PaginatedResponse"
+                            "$ref": "#/definitions/response.Response"
                         }
                     },
                     "400": {
@@ -424,21 +583,21 @@
                 }
             }
         },
-        "/mentions/posts/{id}": {
+        "/mentions/{id}": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns a single post with its comments. Response messages are localized via ?lang= or Accept-Language (id/en).",
+                "description": "Returns a single sentiment-labeled mention. 404s if the post exists but hasn't been labeled yet. Response messages are localized via ?lang= or Accept-Language (id/en).",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "mentions"
                 ],
-                "summary": "Get post detail",
+                "summary": "Get mention detail",
                 "parameters": [
                     {
                         "type": "integer",
@@ -463,6 +622,51 @@
                     }
                 }
             }
+        },
+        "/sentiment/overview": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Aggregated sentiment stats backing the Sentiment Analysis page: score, summary metrics, distribution, trend, per-platform and per-category breakdowns. Combines posts AND comments (see repository.PostRepository's Combined* methods), like /dashboard/overview — unlike /mentions, which is post-only. by_category is keyword-matched (service.ClassifyTopicSentiment), not a stored classification. summary.*.change is always \"-\" — period-over-period comparison isn't implemented. Response messages are localized via ?lang= or Accept-Language (id/en).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sentiment"
+                ],
+                "summary": "Sentiment overview",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD, WIB) — omit for no lower bound",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD, WIB, inclusive) — omit for no upper bound",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -479,6 +683,144 @@
                 "new_password": {
                     "type": "string",
                     "minLength": 8
+                }
+            }
+        },
+        "handler.IngestCommentRequest": {
+            "type": "object",
+            "required": [
+                "platform_comment_id",
+                "published_at"
+            ],
+            "properties": {
+                "author_handle": {
+                    "type": "string"
+                },
+                "content": {
+                    "description": "Content is not required — a comment can legitimately have no text\n(sticker/image-only comment).",
+                    "type": "string"
+                },
+                "like_count": {
+                    "type": "integer"
+                },
+                "model_version": {
+                    "type": "string"
+                },
+                "platform_comment_id": {
+                    "type": "string"
+                },
+                "published_at": {
+                    "type": "string"
+                },
+                "raw_payload": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "sentiment": {
+                    "enum": [
+                        "positive",
+                        "negative",
+                        "neutral"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.Sentiment"
+                        }
+                    ]
+                },
+                "sentiment_score": {
+                    "type": "number"
+                }
+            }
+        },
+        "handler.IngestPostRequest": {
+            "type": "object",
+            "required": [
+                "crawled_at",
+                "platform",
+                "platform_post_id",
+                "published_at"
+            ],
+            "properties": {
+                "author_handle": {
+                    "type": "string"
+                },
+                "author_name": {
+                    "type": "string"
+                },
+                "comment_count": {
+                    "type": "integer"
+                },
+                "comments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.IngestCommentRequest"
+                    }
+                },
+                "content": {
+                    "description": "Content is not required — a post can legitimately have no caption\n(video/image-only post).",
+                    "type": "string"
+                },
+                "crawled_at": {
+                    "type": "string"
+                },
+                "like_count": {
+                    "type": "integer"
+                },
+                "model_version": {
+                    "type": "string"
+                },
+                "platform": {
+                    "enum": [
+                        "x",
+                        "instagram",
+                        "tiktok",
+                        "youtube",
+                        "news"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.Platform"
+                        }
+                    ]
+                },
+                "platform_post_id": {
+                    "type": "string"
+                },
+                "published_at": {
+                    "type": "string"
+                },
+                "raw_payload": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "sentiment": {
+                    "enum": [
+                        "positive",
+                        "negative",
+                        "neutral"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.Sentiment"
+                        }
+                    ]
+                },
+                "sentiment_score": {
+                    "type": "number"
+                },
+                "share_count": {
+                    "type": "integer"
+                },
+                "url": {
+                    "type": "string"
+                },
+                "view_count": {
+                    "type": "integer"
                 }
             }
         },
@@ -540,6 +882,36 @@
                 }
             }
         },
+        "model.Platform": {
+            "type": "string",
+            "enum": [
+                "x",
+                "instagram",
+                "tiktok",
+                "youtube",
+                "news"
+            ],
+            "x-enum-varnames": [
+                "PlatformX",
+                "PlatformInstagram",
+                "PlatformTikTok",
+                "PlatformYouTube",
+                "PlatformNews"
+            ]
+        },
+        "model.Sentiment": {
+            "type": "string",
+            "enum": [
+                "positive",
+                "negative",
+                "neutral"
+            ],
+            "x-enum-varnames": [
+                "SentimentPositive",
+                "SentimentNegative",
+                "SentimentNeutral"
+            ]
+        },
         "response.ErrorResponse": {
             "type": "object",
             "properties": {
@@ -551,38 +923,6 @@
                 },
                 "success": {
                     "type": "boolean"
-                }
-            }
-        },
-        "response.PaginatedResponse": {
-            "type": "object",
-            "properties": {
-                "data": {},
-                "message": {
-                    "type": "string"
-                },
-                "pagination": {
-                    "$ref": "#/definitions/response.Pagination"
-                },
-                "success": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "response.Pagination": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "per_page": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "total_pages": {
-                    "type": "integer"
                 }
             }
         },
@@ -600,6 +940,12 @@
         }
     },
     "securityDefinitions": {
+        "ApiKeyAuth": {
+            "description": "Shared secret for the internal ingest routes (Python labeling worker)",
+            "type": "apiKey",
+            "name": "X-API-Key",
+            "in": "header"
+        },
         "BasicAuth": {
             "type": "basic"
         },

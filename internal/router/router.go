@@ -17,13 +17,17 @@ import (
 )
 
 type Router struct {
-	engine         *gin.Engine
-	cfg            *config.Config
-	db             *gorm.DB
-	cache          *cache.Cache
-	userRepo       repository.UserRepository
-	authHandler    *handler.AuthHandler
-	mentionHandler *handler.MentionHandler
+	engine           *gin.Engine
+	cfg              *config.Config
+	db               *gorm.DB
+	cache            *cache.Cache
+	userRepo         repository.UserRepository
+	authHandler      *handler.AuthHandler
+	mentionHandler   *handler.MentionHandler
+	ingestHandler    *handler.IngestHandler
+	dashboardHandler *handler.DashboardHandler
+	sentimentHandler *handler.SentimentHandler
+	keywordHandler   *handler.KeywordHandler
 }
 
 func New(cfg *config.Config, db *gorm.DB, cacheClient *cache.Cache, stor storage.Storage) *Router {
@@ -49,15 +53,23 @@ func New(cfg *config.Config, db *gorm.DB, cacheClient *cache.Cache, stor storage
 	postRepo := repository.NewPostRepository(db)
 	commentRepo := repository.NewCommentRepository(db)
 	mentionSvc := service.NewMentionService(postRepo, commentRepo)
+	ingestSvc := service.NewIngestService(postRepo, commentRepo)
+	dashboardSvc := service.NewDashboardService(postRepo)
+	sentimentSvc := service.NewSentimentService(postRepo)
+	keywordSvc := service.NewKeywordService(postRepo)
 
 	return &Router{
-		engine:         engine,
-		cfg:            cfg,
-		db:             db,
-		cache:          cacheClient,
-		userRepo:       userRepo,
-		authHandler:    handler.NewAuthHandler(authSvc),
-		mentionHandler: handler.NewMentionHandler(mentionSvc),
+		engine:           engine,
+		cfg:              cfg,
+		db:               db,
+		cache:            cacheClient,
+		userRepo:         userRepo,
+		authHandler:      handler.NewAuthHandler(authSvc),
+		mentionHandler:   handler.NewMentionHandler(mentionSvc),
+		ingestHandler:    handler.NewIngestHandler(ingestSvc),
+		dashboardHandler: handler.NewDashboardHandler(dashboardSvc),
+		sentimentHandler: handler.NewSentimentHandler(sentimentSvc),
+		keywordHandler:   handler.NewKeywordHandler(keywordSvc),
 	}
 }
 
@@ -90,8 +102,38 @@ func (r *Router) Setup() *gin.Engine {
 	mentions := r.engine.Group("/api/v1/mentions")
 	mentions.Use(middleware.JWTAuth(r.cfg.JWT.Secret, r.userRepo))
 	{
-		mentions.GET("/posts", r.mentionHandler.List)
-		mentions.GET("/posts/:id", r.mentionHandler.GetByID)
+		mentions.GET("", r.mentionHandler.List)
+		mentions.GET("/:id", r.mentionHandler.GetByID)
+	}
+
+	// Dashboard routes — JWT required (analyst-facing overview data)
+	dashboard := r.engine.Group("/api/v1/dashboard")
+	dashboard.Use(middleware.JWTAuth(r.cfg.JWT.Secret, r.userRepo))
+	{
+		dashboard.GET("/overview", r.dashboardHandler.GetOverview)
+	}
+
+	// Sentiment routes — JWT required (analyst-facing sentiment analysis data)
+	sentiment := r.engine.Group("/api/v1/sentiment")
+	sentiment.Use(middleware.JWTAuth(r.cfg.JWT.Secret, r.userRepo))
+	{
+		sentiment.GET("/overview", r.sentimentHandler.GetOverview)
+	}
+
+	// Keyword routes — JWT required (analyst-facing keyword analysis data)
+	keywords := r.engine.Group("/api/v1/keywords")
+	keywords.Use(middleware.JWTAuth(r.cfg.JWT.Secret, r.userRepo))
+	{
+		keywords.GET("", r.keywordHandler.List)
+	}
+
+	// Ingest routes — internal service-to-service, shared-secret API key
+	// (see internal/middleware/apikey.go). Used by the Python sentiment-
+	// labeling worker to push crawled/labeled posts and comments.
+	ingest := r.engine.Group("/api/v1/ingest")
+	ingest.Use(middleware.APIKeyAuth(r.cfg.Ingest.APIKey))
+	{
+		ingest.POST("/posts", r.ingestHandler.IngestPost)
 	}
 
 	// Other API routes — Basic Auth required

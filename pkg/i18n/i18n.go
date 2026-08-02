@@ -46,6 +46,7 @@ var messages = map[string]map[Lang]string{
 	"validation.lte":          {EN: "must be less than or equal to %s", ID: "harus lebih kecil atau sama dengan %s"},
 	"validation.oneof":        {EN: "must be one of: %s", ID: "harus salah satu dari: %s"},
 	"validation.generic":      {EN: "failed validation on '%s'", ID: "gagal validasi pada '%s'"},
+	"validation.invalid_date": {EN: "invalid date — use YYYY-MM-DD", ID: "tanggal tidak valid — gunakan format YYYY-MM-DD"},
 
 	// Auth handler (internal/handler/auth.go)
 	"auth.register.success":       {EN: "registration successful", ID: "registrasi berhasil"},
@@ -69,8 +70,8 @@ var messages = map[string]map[Lang]string{
 	"auth.logout_all.failed":      {EN: "failed to log out of all devices", ID: "gagal keluar dari semua perangkat"},
 
 	// JWT middleware (internal/middleware/jwt.go)
-	"auth.token_required": {EN: "authorization header with Bearer token required", ID: "header otorisasi dengan token Bearer wajib disertakan"},
-	"auth.token_invalid":  {EN: "invalid or expired token", ID: "token tidak valid atau sudah kedaluwarsa"},
+	"auth.token_required":  {EN: "authorization header with Bearer token required", ID: "header otorisasi dengan token Bearer wajib disertakan"},
+	"auth.token_invalid":   {EN: "invalid or expired token", ID: "token tidak valid atau sudah kedaluwarsa"},
 	"auth.session_revoked": {EN: "session has been revoked, please log in again", ID: "sesi telah dicabut, silakan masuk kembali"},
 
 	// Sentinel errors surfaced to clients (internal/service/auth.go, internal/service/mention.go)
@@ -87,6 +88,22 @@ var messages = map[string]map[Lang]string{
 	"mentions.posts.invalid_id":  {EN: "invalid post id", ID: "id postingan tidak valid"},
 	"mentions.posts.list_ok":     {EN: "posts retrieved", ID: "daftar postingan berhasil diambil"},
 	"mentions.posts.get_ok":      {EN: "post retrieved", ID: "postingan berhasil diambil"},
+
+	// Ingest handler (internal/handler/ingest.go)
+	"ingest.posts.create_ok":     {EN: "post ingested", ID: "postingan berhasil disimpan"},
+	"ingest.posts.create_failed": {EN: "failed to ingest post", ID: "gagal menyimpan postingan"},
+
+	// Dashboard handler (internal/handler/dashboard.go)
+	"dashboard.overview.get_ok":     {EN: "dashboard overview retrieved", ID: "ringkasan dashboard berhasil diambil"},
+	"dashboard.overview.get_failed": {EN: "failed to get dashboard overview", ID: "gagal mengambil ringkasan dashboard"},
+
+	// Sentiment handler (internal/handler/sentiment.go)
+	"sentiment.overview.get_ok":     {EN: "sentiment overview retrieved", ID: "ringkasan sentimen berhasil diambil"},
+	"sentiment.overview.get_failed": {EN: "failed to get sentiment overview", ID: "gagal mengambil ringkasan sentimen"},
+
+	// Keyword handler (internal/handler/keywords.go)
+	"keywords.list_ok":     {EN: "keywords retrieved", ID: "daftar keyword berhasil diambil"},
+	"keywords.list_failed": {EN: "failed to list keywords", ID: "gagal mengambil daftar keyword"},
 }
 
 // T translates key into the given language, formatting it with args via

@@ -64,6 +64,9 @@ func EnsureHypertables(db *gorm.DB, tables map[string]string) error {
 	}
 
 	for table, timeColumn := range tables {
+		if err := dropReferencingForeignKeys(db, table); err != nil {
+			return fmt.Errorf("drop foreign keys referencing %s: %w", table, err)
+		}
 		if err := repairUniqueIndexes(db, table, timeColumn); err != nil {
 			return fmt.Errorf("repair unique indexes for %s: %w", table, err)
 		}
@@ -76,6 +79,49 @@ func EnsureHypertables(db *gorm.DB, tables map[string]string) error {
 		)
 		if err := db.Exec(sql).Error; err != nil {
 			return fmt.Errorf("create hypertable for %s: %w", table, err)
+		}
+	}
+
+	return nil
+}
+
+// dropReferencingForeignKeys drops every foreign key constraint that
+// references table. TimescaleDB does not support foreign keys pointing at a
+// hypertable, and a leftover FK (created by an older schema before FK
+// creation was disabled in NewPostgres) also blocks repairUniqueIndexes from
+// dropping the primary key it depends on. Outgoing FKs from the table are
+// left alone — TimescaleDB allows those.
+func dropReferencingForeignKeys(db *gorm.DB, table string) error {
+	type foreignKey struct {
+		ConstraintName string
+		SchemaName     string
+		TableName      string
+	}
+
+	var fks []foreignKey
+	err := db.Raw(`
+		SELECT con.conname AS constraint_name,
+		       reln.nspname AS schema_name,
+		       rel.relname AS table_name
+		FROM pg_constraint con
+		JOIN pg_class rel ON rel.oid = con.conrelid
+		JOIN pg_namespace reln ON reln.oid = rel.relnamespace
+		JOIN pg_class ref ON ref.oid = con.confrelid
+		JOIN pg_namespace refn ON refn.oid = ref.relnamespace
+		WHERE con.contype = 'f'
+		  AND refn.nspname = current_schema()
+		  AND ref.relname = ?`, table).Scan(&fks).Error
+	if err != nil {
+		return fmt.Errorf("detect referencing foreign keys: %w", err)
+	}
+
+	for _, fk := range fks {
+		sql := fmt.Sprintf(
+			"ALTER TABLE %s.%s DROP CONSTRAINT %s",
+			quoteIdent(fk.SchemaName), quoteIdent(fk.TableName), quoteIdent(fk.ConstraintName),
+		)
+		if err := db.Exec(sql).Error; err != nil {
+			return fmt.Errorf("drop %s: %w", fk.ConstraintName, err)
 		}
 	}
 

@@ -21,6 +21,10 @@ import (
 // @in                         header
 // @name                       Authorization
 // @description                Enter: Bearer {token}
+// @securityDefinitions.apikey ApiKeyAuth
+// @in                         header
+// @name                       X-API-Key
+// @description                Shared secret for the internal ingest routes (Python labeling worker)
 func main() {
 	cfg := config.Load()
 	docs.SwaggerInfo.Host = cfg.Server.SwaggerHost
