@@ -49,7 +49,7 @@ type DashboardOverview struct {
 }
 
 type DashboardService interface {
-	GetOverview(ctx context.Context, from, to *time.Time) (DashboardOverview, error)
+	GetOverview(ctx context.Context, from, to *time.Time, platform string) (DashboardOverview, error)
 }
 
 type dashboardService struct {
@@ -70,19 +70,22 @@ func NewDashboardService(postRepo repository.PostRepository) DashboardService {
 // from/to are nil when the frontend's topbar date-range picker is cleared
 // ("view without a date range") — every aggregate below then covers
 // all-time (CombinedTrend still applies its own fallback lookback window
-// in that case — see its doc comment).
-func (s *dashboardService) GetOverview(ctx context.Context, from, to *time.Time) (DashboardOverview, error) {
-	agg, err := s.postRepo.CombinedAggregate(ctx, from, to)
+// in that case — see its doc comment). platform is "" when the topbar's
+// platform picker is cleared ("All Platforms"). PlatformVolume is the one
+// exception — it deliberately ignores platform (see CombinedPlatformVolume's
+// doc comment on the repository interface).
+func (s *dashboardService) GetOverview(ctx context.Context, from, to *time.Time, platform string) (DashboardOverview, error) {
+	agg, err := s.postRepo.CombinedAggregate(ctx, from, to, platform)
 	if err != nil {
 		return DashboardOverview{}, err
 	}
 
-	trend, err := s.postRepo.CombinedTrend(ctx, from, to)
+	trend, err := s.postRepo.CombinedTrend(ctx, from, to, platform)
 	if err != nil {
 		return DashboardOverview{}, err
 	}
 
-	recentPosts, _, err := s.postRepo.List(ctx, repository.PostFilter{From: from, To: to, Page: 1, PerPage: recentMentionsLimit})
+	recentPosts, _, err := s.postRepo.List(ctx, repository.PostFilter{Platform: platform, From: from, To: to, Page: 1, PerPage: recentMentionsLimit})
 	if err != nil {
 		return DashboardOverview{}, err
 	}
@@ -92,7 +95,7 @@ func (s *dashboardService) GetOverview(ctx context.Context, from, to *time.Time)
 		return DashboardOverview{}, err
 	}
 
-	contentRows, err := s.postRepo.CombinedContent(ctx, from, to)
+	contentRows, err := s.postRepo.CombinedContent(ctx, from, to, platform)
 	if err != nil {
 		return DashboardOverview{}, err
 	}

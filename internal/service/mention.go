@@ -23,6 +23,9 @@ type ListMentionsInput struct {
 	// treats that as all-time, unfiltered by date.
 	From *time.Time
 	To   *time.Time
+	// SortBy is "newest" (default), "oldest", or "engagement" — see
+	// repository.postOrderClause.
+	SortBy string
 }
 
 // MentionsPage bundles a page of labeled posts with the aggregates the
@@ -53,7 +56,9 @@ type MentionsPage struct {
 type MentionService interface {
 	ListMentions(ctx context.Context, input ListMentionsInput) (MentionsPage, error)
 	GetPost(ctx context.Context, id uint) (*model.Post, error)
-	ListComments(ctx context.Context, postID uint) ([]model.Comment, error)
+	// ListComments returns a page of postID's labeled comments (oldest
+	// first) plus the total count matching, for pagination.
+	ListComments(ctx context.Context, postID uint, page, perPage int) ([]model.Comment, int64, error)
 }
 
 type mentionService struct {
@@ -74,6 +79,7 @@ func (s *mentionService) ListMentions(ctx context.Context, input ListMentionsInp
 		To:        input.To,
 		Page:      input.Page,
 		PerPage:   input.PerPage,
+		SortBy:    input.SortBy,
 	}
 
 	posts, total, err := s.postRepo.List(ctx, filter)
@@ -142,6 +148,6 @@ func (s *mentionService) GetPost(ctx context.Context, id uint) (*model.Post, err
 	return post, nil
 }
 
-func (s *mentionService) ListComments(ctx context.Context, postID uint) ([]model.Comment, error) {
-	return s.commentRepo.ListByPostID(ctx, postID)
+func (s *mentionService) ListComments(ctx context.Context, postID uint, page, perPage int) ([]model.Comment, int64, error) {
+	return s.commentRepo.ListByPostID(ctx, postID, page, perPage)
 }

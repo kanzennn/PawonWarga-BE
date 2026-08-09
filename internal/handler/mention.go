@@ -29,11 +29,15 @@ func NewMentionHandler(mentionSvc service.MentionService) *MentionHandler {
 // container image shipping IANA tzdata.
 var wib = time.FixedZone("WIB", 7*3600)
 
-// DateRangeQuery is the topbar date-range picker's query params, shared
-// (via embedding) by every handler that filters on published_at.
+// DateRangeQuery is the topbar's date-range and platform picker query
+// params, shared (via embedding) by every handler that filters on
+// published_at/platform. Named for the date range specifically since that
+// was the first of the two — Platform joined it later, see parseDateRange
+// and each handler's use of query.Platform.
 type DateRangeQuery struct {
-	From string `form:"from"`
-	To   string `form:"to"`
+	From     string `form:"from"`
+	To       string `form:"to"`
+	Platform string `form:"platform"`
 }
 
 // parseDateRange parses the topbar date-range picker's `from`/`to` query
@@ -99,6 +103,9 @@ type MentionItem struct {
 	Location   string `json:"location"`
 	Category   string `json:"category"`
 	Risk       string `json:"risk"`
+	// URL links to the original post on its source platform — "" if Argus
+	// never captured one for this post.
+	URL string `json:"url"`
 }
 
 type MentionMetrics struct {
@@ -136,6 +143,61 @@ type MentionsListResponse struct {
 	Platforms       []string             `json:"platforms"`
 }
 
+// CommentItem is one entry in GET /mentions/{id}/comments' "items" array —
+// deliberately smaller than MentionItem (no location/category/risk, which
+// comments don't carry of their own).
+type CommentItem struct {
+	ID         uint   `json:"id"`
+	User       string `json:"user"`
+	Text       string `json:"text"`
+	Sentiment  string `json:"sentiment"`
+	Engagement string `json:"engagement"`
+	Time       string `json:"time"`
+}
+
+type CommentListResponse struct {
+	Items      []CommentItem       `json:"items"`
+	Pagination response.Pagination `json:"pagination"`
+}
+
+// formatCommentItem mirrors formatMentionItem for the smaller Comment shape
+// — only called with sentiment-labeled comments (ListComments filters at
+// the DB level, same guarantee formatMentionItem's callers have for posts).
+func formatCommentItem(comment model.Comment) CommentItem {
+	user := "Unknown"
+	if comment.AuthorHandle != nil && *comment.AuthorHandle != "" {
+		user = "@" + *comment.AuthorHandle
+	}
+
+	sentiment := model.SentimentNeutral
+	if comment.Sentiment != nil {
+		sentiment = *comment.Sentiment
+	}
+
+	return CommentItem{
+		ID:         comment.ID,
+		User:       user,
+		Text:       comment.Content,
+		Sentiment:  string(sentiment),
+		Engagement: formatCompact(int64(comment.LikeCount)),
+		Time:       formatMentionTime(comment.PublishedAt),
+	}
+}
+
+var indoMonthFull = [...]string{
+	"", "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+	"Juli", "Agustus", "September", "Oktober", "November", "Desember",
+}
+
+// formatMentionTime renders "15 Juli 2025, 01:21" (WIB) — date and time
+// only. A full "Hari, 15 Juli 2025, 01:21" (with day name) was the initial
+// ask, but that runs too long alongside platform/location/time in the
+// mention list row, so the day name is dropped.
+func formatMentionTime(t time.Time) string {
+	local := t.In(wib)
+	return fmt.Sprintf("%d %s %d, %s", local.Day(), indoMonthFull[local.Month()], local.Year(), local.Format("15:04"))
+}
+
 // formatMentionItem maps a labeled model.Post onto the frontend's display
 // DTO. Only called with posts that have a non-nil Sentiment — MentionService
 // guarantees that (List filters at the DB level, GetPost 404s on unlabeled).
@@ -162,6 +224,10 @@ func formatMentionItem(post model.Post) MentionItem {
 	if post.Category != nil {
 		category = *post.Category
 	}
+	url := ""
+	if post.URL != nil {
+		url = *post.URL
+	}
 
 	return MentionItem{
 		ID:         post.ID,
@@ -170,10 +236,11 @@ func formatMentionItem(post model.Post) MentionItem {
 		Text:       post.Content,
 		Sentiment:  string(sentiment),
 		Engagement: formatCompact(int64(engagement)),
-		Time:       post.PublishedAt.In(wib).Format("15:04"),
+		Time:       formatMentionTime(post.PublishedAt),
 		Location:   location,
 		Category:   category,
 		Risk:       riskFromSentiment(sentiment),
+		URL:        url,
 	}
 }
 
@@ -234,6 +301,9 @@ type ListMentionsQuery struct {
 	To      string `form:"to"`
 	Page    int    `form:"page,default=1"`
 	PerPage int    `form:"per_page,default=20"`
+	// Sort is "newest" (default), "oldest", or "engagement" — see
+	// repository.postOrderClause.
+	Sort string `form:"sort"`
 }
 
 // List godoc
@@ -249,6 +319,7 @@ type ListMentionsQuery struct {
 // @Param        to         query     string  false  "End date (YYYY-MM-DD, WIB, inclusive) — omit for no upper bound"
 // @Param        page       query     int     false  "Page number"      default(1)
 // @Param        per_page   query     int     false  "Items per page"   default(20)
+// @Param        sort       query     string  false  "newest (default), oldest, or engagement"
 // @Success      200  {object}  response.Response
 // @Failure      400  {object}  response.ErrorResponse
 // @Router       /mentions [get]
@@ -281,6 +352,7 @@ func (h *MentionHandler) List(c *gin.Context) {
 		To:        to,
 		Page:      query.Page,
 		PerPage:   query.PerPage,
+		SortBy:    query.Sort,
 	})
 	if err != nil {
 		response.InternalServerError(c, i18n.T(lang, "mentions.posts.list_failed"), err)
@@ -359,4 +431,64 @@ func (h *MentionHandler) GetByID(c *gin.Context) {
 	}
 
 	response.OK(c, i18n.T(lang, "mentions.posts.get_ok"), formatMentionItem(*post))
+}
+
+type ListCommentsQuery struct {
+	Page    int `form:"page,default=1"`
+	PerPage int `form:"per_page,default=20"`
+}
+
+// ListComments godoc
+// @Summary      List comments for a mention
+// @Description  Paginated labeled comments on a single post, oldest first. 404s if the post doesn't exist or hasn't been labeled yet — same check GetByID applies. Response messages are localized via ?lang= or Accept-Language (id/en).
+// @Tags         mentions
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id        path      int  true   "Post ID"
+// @Param        page      query     int  false  "Page number"    default(1)
+// @Param        per_page  query     int  false  "Items per page" default(20)
+// @Success      200  {object}  response.Response
+// @Failure      404  {object}  response.ErrorResponse
+// @Router       /mentions/{id}/comments [get]
+func (h *MentionHandler) ListComments(c *gin.Context) {
+	lang := i18n.FromContext(c)
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, i18n.T(lang, "mentions.posts.invalid_id"), err)
+		return
+	}
+
+	var query ListCommentsQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		response.ValidationFailed(c, err)
+		return
+	}
+
+	// Confirm the post exists & is labeled first, so a bad id 404s the same
+	// way GetByID does, rather than silently returning an empty list.
+	if _, err := h.mentionSvc.GetPost(c.Request.Context(), uint(id)); err != nil {
+		if errors.Is(err, service.ErrPostNotFound) {
+			response.NotFound(c, i18n.T(lang, "error.post_not_found"))
+			return
+		}
+		response.InternalServerError(c, i18n.T(lang, "mentions.posts.get_failed"), err)
+		return
+	}
+
+	comments, total, err := h.mentionSvc.ListComments(c.Request.Context(), uint(id), query.Page, query.PerPage)
+	if err != nil {
+		response.InternalServerError(c, i18n.T(lang, "mentions.comments.get_failed"), err)
+		return
+	}
+
+	items := make([]CommentItem, len(comments))
+	for i, comment := range comments {
+		items[i] = formatCommentItem(comment)
+	}
+
+	response.OK(c, i18n.T(lang, "mentions.comments.get_ok"), CommentListResponse{
+		Items:      items,
+		Pagination: response.NewPagination(query.Page, query.PerPage, total),
+	})
 }

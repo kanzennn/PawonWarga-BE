@@ -25,6 +25,23 @@ type PostFilter struct {
 	To        *time.Time
 	Page      int
 	PerPage   int
+	// SortBy is one of "newest" (default), "oldest", "engagement" — see
+	// postOrderClause. Anything else falls back to "newest".
+	SortBy string
+}
+
+// postOrderClause maps a PostFilter.SortBy value to a safe, whitelisted SQL
+// ORDER BY fragment — never interpolate SortBy into SQL directly, since it
+// comes straight from a query param.
+func postOrderClause(sortBy string) string {
+	switch sortBy {
+	case "oldest":
+		return "published_at ASC"
+	case "engagement":
+		return "(like_count + comment_count + share_count) DESC"
+	default: // "newest" or unrecognized
+		return "published_at DESC"
+	}
 }
 
 // PostAggregate summarizes a filtered set of posts — used by the /mentions
@@ -101,12 +118,18 @@ type PostRepository interface {
 	//
 	// Each takes an optional date range (from/to nil = all-time, matching
 	// the "view without a date range" option in the frontend's topbar
-	// picker). CombinedTrend additionally falls back to a fixed lookback
-	// window when both are nil — see its doc comment.
-	CombinedAggregate(ctx context.Context, from, to *time.Time) (PostAggregate, error)
-	CombinedTrend(ctx context.Context, from, to *time.Time) ([]DailySentimentRow, error)
+	// picker) and an optional platform filter (""= all platforms, matching
+	// the topbar's platform picker). CombinedTrend additionally falls back
+	// to a fixed lookback window when from/to are both nil — see its doc
+	// comment. CombinedPlatformVolume deliberately has no platform param —
+	// it backs per-platform breakdown panels (Dashboard's Data Sources,
+	// Sentiment's "by Platform" chart), which stay unfiltered by platform
+	// regardless of the topbar selection, same as /mentions' own
+	// PlatformVolume.
+	CombinedAggregate(ctx context.Context, from, to *time.Time, platform string) (PostAggregate, error)
+	CombinedTrend(ctx context.Context, from, to *time.Time, platform string) ([]DailySentimentRow, error)
 	CombinedPlatformVolume(ctx context.Context, from, to *time.Time) ([]PlatformVolumeRow, error)
-	CombinedContent(ctx context.Context, from, to *time.Time) ([]PostContentRow, error)
+	CombinedContent(ctx context.Context, from, to *time.Time, platform string) ([]PostContentRow, error)
 	// FindUnlabeled returns posts where sentiment IS NULL, oldest first — used by the
 	// nightly labeling worker.
 	FindUnlabeled(ctx context.Context, limit int) ([]model.Post, error)
@@ -212,7 +235,7 @@ func (r *postRepository) List(ctx context.Context, filter PostFilter) ([]model.P
 
 	var posts []model.Post
 	err := query.
-		Order("published_at DESC").
+		Order(postOrderClause(filter.SortBy)).
 		Limit(perPage).
 		Offset((page - 1) * perPage).
 		Find(&posts).Error
@@ -330,17 +353,24 @@ func (r *postRepository) CombinedPlatformMentionCounts(ctx context.Context, filt
 // TODO(caching): when from/to are both nil, this is unfiltered/all-time —
 // every Combined* query below scans both posts and comments in full, the
 // most expensive queries in this file.
-func (r *postRepository) CombinedAggregate(ctx context.Context, from, to *time.Time) (PostAggregate, error) {
+func (r *postRepository) CombinedAggregate(ctx context.Context, from, to *time.Time, platform string) (PostAggregate, error) {
 	postClause, postArgs := dateRangeClause("published_at", from, to)
-	commentClause, commentArgs := dateRangeClause("published_at", from, to)
+	commentClause, commentArgs := dateRangeClause("c.published_at", from, to)
+	if platform != "" {
+		postClause += " AND platform = ?"
+		postArgs = append(postArgs, platform)
+		commentClause += " AND p.platform = ?"
+		commentArgs = append(commentArgs, platform)
+	}
 
 	sql := fmt.Sprintf(`
 		WITH combined AS (
 			SELECT sentiment, author_handle, (like_count + comment_count + share_count) AS engagement
 			FROM posts WHERE sentiment IS NOT NULL%s
 			UNION ALL
-			SELECT sentiment, author_handle, like_count AS engagement
-			FROM comments WHERE sentiment IS NOT NULL%s
+			SELECT c.sentiment, c.author_handle, c.like_count AS engagement
+			FROM comments c JOIN posts p ON p.id = c.post_id
+			WHERE c.sentiment IS NOT NULL%s
 		)
 		SELECT
 			COUNT(*) AS total,
@@ -361,22 +391,29 @@ func (r *postRepository) CombinedAggregate(ctx context.Context, from, to *time.T
 // gives no date range at all (from and to both nil) — matching the "no
 // date range" / all-time default elsewhere. An explicit range (even a
 // single-sided one) is used exactly as given, however long or short.
-func (r *postRepository) CombinedTrend(ctx context.Context, from, to *time.Time) ([]DailySentimentRow, error) {
+func (r *postRepository) CombinedTrend(ctx context.Context, from, to *time.Time, platform string) ([]DailySentimentRow, error) {
 	if from == nil && to == nil {
 		since := time.Now().AddDate(0, 0, -trendFallbackDays)
 		from = &since
 	}
 
 	postClause, postArgs := dateRangeClause("published_at", from, to)
-	commentClause, commentArgs := dateRangeClause("published_at", from, to)
+	commentClause, commentArgs := dateRangeClause("c.published_at", from, to)
+	if platform != "" {
+		postClause += " AND platform = ?"
+		postArgs = append(postArgs, platform)
+		commentClause += " AND p.platform = ?"
+		commentArgs = append(commentArgs, platform)
+	}
 
 	sql := fmt.Sprintf(`
 		WITH combined AS (
 			SELECT published_at, sentiment FROM posts
 			WHERE sentiment IS NOT NULL%s
 			UNION ALL
-			SELECT published_at, sentiment FROM comments
-			WHERE sentiment IS NOT NULL%s
+			SELECT c.published_at, c.sentiment
+			FROM comments c JOIN posts p ON p.id = c.post_id
+			WHERE c.sentiment IS NOT NULL%s
 		)
 		SELECT
 			DATE(published_at) AS day,
@@ -423,16 +460,23 @@ func (r *postRepository) CombinedPlatformVolume(ctx context.Context, from, to *t
 	return rows, err
 }
 
-func (r *postRepository) CombinedContent(ctx context.Context, from, to *time.Time) ([]PostContentRow, error) {
+func (r *postRepository) CombinedContent(ctx context.Context, from, to *time.Time, platform string) ([]PostContentRow, error) {
 	postClause, postArgs := dateRangeClause("published_at", from, to)
-	commentClause, commentArgs := dateRangeClause("published_at", from, to)
+	commentClause, commentArgs := dateRangeClause("c.published_at", from, to)
+	if platform != "" {
+		postClause += " AND platform = ?"
+		postArgs = append(postArgs, platform)
+		commentClause += " AND p.platform = ?"
+		commentArgs = append(commentArgs, platform)
+	}
 
 	sql := fmt.Sprintf(`
 		SELECT content, sentiment, (like_count + comment_count + share_count) AS engagement
 		FROM posts WHERE sentiment IS NOT NULL%s
 		UNION ALL
-		SELECT content, sentiment, like_count AS engagement
-		FROM comments WHERE sentiment IS NOT NULL%s
+		SELECT c.content, c.sentiment, c.like_count AS engagement
+		FROM comments c JOIN posts p ON p.id = c.post_id
+		WHERE c.sentiment IS NOT NULL%s
 	`, postClause, commentClause)
 
 	var rows []PostContentRow

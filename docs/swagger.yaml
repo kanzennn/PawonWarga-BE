@@ -417,9 +417,15 @@ paths:
         Combined* methods) — unlike /mentions, which is post-only. recent_mentions
         is the one exception and stays post-only (a bare comment has no url/location/category
         of its own). topic_distribution/keyword_cloud/drivers are keyword-matched,
-        not a stored classification — see service.ClassifyTopics/computeDrivers. summary.*.change
-        is always "-" — period-over-period comparison isn''t implemented. Response
-        messages are localized via ?lang= or Accept-Language (id/en).'
+        not a stored classification — see service.ClassifyTopics/computeDrivers. trend.positive/neutral/negative
+        are each bucket''s percentage share (0-100) and trend.*_count are that same
+        bucket''s raw mention counts — the frontend''s Percentage/Total toggle switches
+        between them (same shape as /sentiment/overview''s trend). The platform filter
+        applies to everything except data_sources, which always reports every platform''s
+        status regardless of the filter (it''s a connectivity widget, not a filtered
+        breakdown). summary.*.change is always "-" — period-over-period comparison
+        isn''t implemented. Response messages are localized via ?lang= or Accept-Language
+        (id/en).'
       parameters:
       - description: Start date (YYYY-MM-DD, WIB) — omit for no lower bound
         in: query
@@ -428,6 +434,10 @@ paths:
       - description: End date (YYYY-MM-DD, WIB, inclusive) — omit for no upper bound
         in: query
         name: to
+        type: string
+      - description: X, Instagram, TikTok, News, or YouTube — omit for all platforms
+        in: query
+        name: platform
         type: string
       produces:
       - application/json
@@ -521,6 +531,10 @@ paths:
         in: query
         name: to
         type: string
+      - description: X, Instagram, TikTok, News, or YouTube — omit for all platforms
+        in: query
+        name: platform
+        type: string
       produces:
       - application/json
       responses:
@@ -573,6 +587,10 @@ paths:
         in: query
         name: per_page
         type: integer
+      - description: newest (default), oldest, or engagement
+        in: query
+        name: sort
+        type: string
       produces:
       - application/json
       responses:
@@ -616,6 +634,43 @@ paths:
       summary: Get mention detail
       tags:
       - mentions
+  /mentions/{id}/comments:
+    get:
+      description: Paginated labeled comments on a single post, oldest first. 404s
+        if the post doesn't exist or hasn't been labeled yet — same check GetByID
+        applies. Response messages are localized via ?lang= or Accept-Language (id/en).
+      parameters:
+      - description: Post ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List comments for a mention
+      tags:
+      - mentions
   /sentiment/overview:
     get:
       description: 'Aggregated sentiment stats backing the Sentiment Analysis page:
@@ -623,9 +678,11 @@ paths:
         breakdowns. Combines posts AND comments (see repository.PostRepository''s
         Combined* methods), like /dashboard/overview — unlike /mentions, which is
         post-only. by_category is keyword-matched (service.ClassifyTopicSentiment),
-        not a stored classification. summary.*.change is always "-" — period-over-period
-        comparison isn''t implemented. Response messages are localized via ?lang=
-        or Accept-Language (id/en).'
+        not a stored classification. The platform filter applies to everything except
+        by_platform, which always reports every platform (filtering a per-platform
+        breakdown down to one platform would defeat its purpose). summary.*.change
+        is always "-" — period-over-period comparison isn''t implemented. Response
+        messages are localized via ?lang= or Accept-Language (id/en).'
       parameters:
       - description: Start date (YYYY-MM-DD, WIB) — omit for no lower bound
         in: query
@@ -634,6 +691,10 @@ paths:
       - description: End date (YYYY-MM-DD, WIB, inclusive) — omit for no upper bound
         in: query
         name: to
+        type: string
+      - description: X, Instagram, TikTok, News, or YouTube — omit for all platforms
+        in: query
+        name: platform
         type: string
       produces:
       - application/json

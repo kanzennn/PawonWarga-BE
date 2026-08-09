@@ -83,6 +83,7 @@ type ListKeywordsQuery struct {
 // @Param        sentiment  query     string  false  "positive, negative, neutral, or \"All Sentiments\""
 // @Param        from       query     string  false  "Start date (YYYY-MM-DD, WIB) — omit for no lower bound"
 // @Param        to         query     string  false  "End date (YYYY-MM-DD, WIB, inclusive) — omit for no upper bound"
+// @Param        platform   query     string  false  "X, Instagram, TikTok, News, or YouTube — omit for all platforms"
 // @Success      200  {object}  response.Response
 // @Failure      400  {object}  response.ErrorResponse
 // @Router       /keywords [get]
@@ -99,8 +100,9 @@ func (h *KeywordHandler) List(c *gin.Context) {
 		response.BadRequest(c, i18n.T(lang, "validation.invalid_date"), err)
 		return
 	}
+	platform := platformsByDisplayName[query.Platform] // "" for "All Platforms" / unknown / empty
 
-	overview, err := h.keywordSvc.GetKeywords(c.Request.Context(), from, to)
+	overview, err := h.keywordSvc.GetKeywords(c.Request.Context(), from, to, string(platform))
 	if err != nil {
 		response.InternalServerError(c, i18n.T(lang, "keywords.list_failed"), err)
 		return

@@ -17,7 +17,7 @@ type KeywordsOverview struct {
 }
 
 type KeywordService interface {
-	GetKeywords(ctx context.Context, from, to *time.Time) (KeywordsOverview, error)
+	GetKeywords(ctx context.Context, from, to *time.Time, platform string) (KeywordsOverview, error)
 }
 
 type keywordService struct {
@@ -30,8 +30,10 @@ func NewKeywordService(postRepo repository.PostRepository) KeywordService {
 
 // GetKeywords: from/to are nil when the topbar date-range picker is
 // cleared ("view without a date range") — extraction then covers all-time.
-func (s *keywordService) GetKeywords(ctx context.Context, from, to *time.Time) (KeywordsOverview, error) {
-	contentRows, err := s.postRepo.CombinedContent(ctx, from, to)
+// platform is "" when the topbar's platform picker is cleared ("All
+// Platforms").
+func (s *keywordService) GetKeywords(ctx context.Context, from, to *time.Time, platform string) (KeywordsOverview, error) {
+	contentRows, err := s.postRepo.CombinedContent(ctx, from, to, platform)
 	if err != nil {
 		return KeywordsOverview{}, err
 	}

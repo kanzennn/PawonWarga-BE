@@ -26,7 +26,10 @@ type CommentRepository interface {
 	// Upsert inserts a comment or, if (post_id, platform_comment_id) already exists,
 	// refreshes fields that change on re-crawl. Never touches sentiment fields.
 	Upsert(ctx context.Context, comment *model.Comment) error
-	ListByPostID(ctx context.Context, postID uint) ([]model.Comment, error)
+	// ListByPostID returns a page of labeled comments on postID (oldest
+	// first) plus the total count matching (for pagination) — backs
+	// GET /mentions/{id}/comments.
+	ListByPostID(ctx context.Context, postID uint, page, perPage int) ([]model.Comment, int64, error)
 	// CountFiltered returns the number of labeled comments matching filter,
 	// joined to their parent post for the platform dimension.
 	CountFiltered(ctx context.Context, filter CommentFilter) (int64, error)
@@ -56,13 +59,30 @@ func (r *commentRepository) Upsert(ctx context.Context, comment *model.Comment) 
 		Create(comment).Error
 }
 
-func (r *commentRepository) ListByPostID(ctx context.Context, postID uint) ([]model.Comment, error) {
+func (r *commentRepository) ListByPostID(ctx context.Context, postID uint, page, perPage int) ([]model.Comment, int64, error) {
+	query := r.db.WithContext(ctx).Model(&model.Comment{}).
+		Where("post_id = ? AND sentiment IS NOT NULL", postID)
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 {
+		perPage = 20
+	}
+
 	var comments []model.Comment
-	err := r.db.WithContext(ctx).
-		Where("post_id = ?", postID).
+	err := query.
 		Order("published_at ASC").
+		Limit(perPage).
+		Offset((page - 1) * perPage).
 		Find(&comments).Error
-	return comments, err
+
+	return comments, total, err
 }
 
 func (r *commentRepository) CountFiltered(ctx context.Context, filter CommentFilter) (int64, error) {

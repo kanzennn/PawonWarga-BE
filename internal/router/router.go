@@ -104,6 +104,7 @@ func (r *Router) Setup() *gin.Engine {
 	{
 		mentions.GET("", r.mentionHandler.List)
 		mentions.GET("/:id", r.mentionHandler.GetByID)
+		mentions.GET("/:id/comments", r.mentionHandler.ListComments)
 	}
 
 	// Dashboard routes — JWT required (analyst-facing overview data)

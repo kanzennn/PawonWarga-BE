@@ -83,11 +83,13 @@ var messages = map[string]map[Lang]string{
 	"error.incorrect_password":     {EN: "current password is incorrect", ID: "kata sandi saat ini salah"},
 
 	// Mentions handler (internal/handler/mention.go)
-	"mentions.posts.list_failed": {EN: "failed to list posts", ID: "gagal mengambil daftar postingan"},
-	"mentions.posts.get_failed":  {EN: "failed to get post", ID: "gagal mengambil postingan"},
-	"mentions.posts.invalid_id":  {EN: "invalid post id", ID: "id postingan tidak valid"},
-	"mentions.posts.list_ok":     {EN: "posts retrieved", ID: "daftar postingan berhasil diambil"},
-	"mentions.posts.get_ok":      {EN: "post retrieved", ID: "postingan berhasil diambil"},
+	"mentions.posts.list_failed":   {EN: "failed to list posts", ID: "gagal mengambil daftar postingan"},
+	"mentions.posts.get_failed":    {EN: "failed to get post", ID: "gagal mengambil postingan"},
+	"mentions.posts.invalid_id":    {EN: "invalid post id", ID: "id postingan tidak valid"},
+	"mentions.posts.list_ok":       {EN: "posts retrieved", ID: "daftar postingan berhasil diambil"},
+	"mentions.posts.get_ok":        {EN: "post retrieved", ID: "postingan berhasil diambil"},
+	"mentions.comments.get_failed": {EN: "failed to get comments", ID: "gagal mengambil komentar"},
+	"mentions.comments.get_ok":     {EN: "comments retrieved", ID: "daftar komentar berhasil diambil"},
 
 	// Ingest handler (internal/handler/ingest.go)
 	"ingest.posts.create_ok":     {EN: "post ingested", ID: "postingan berhasil disimpan"},

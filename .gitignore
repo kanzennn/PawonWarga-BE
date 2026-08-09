@@ -1,6 +1,5 @@
 # environment & secrets
 .env
-.env.*
 
 # build output
 bin/

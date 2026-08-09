@@ -160,12 +160,13 @@ func categoryNote(byCategory []CategorySentimentResponse) string {
 
 // GetOverview godoc
 // @Summary      Sentiment overview
-// @Description  Aggregated sentiment stats backing the Sentiment Analysis page: score, summary metrics, distribution, trend, per-platform and per-category breakdowns. Combines posts AND comments (see repository.PostRepository's Combined* methods), like /dashboard/overview — unlike /mentions, which is post-only. by_category is keyword-matched (service.ClassifyTopicSentiment), not a stored classification. summary.*.change is always "-" — period-over-period comparison isn't implemented. Response messages are localized via ?lang= or Accept-Language (id/en).
+// @Description  Aggregated sentiment stats backing the Sentiment Analysis page: score, summary metrics, distribution, trend, per-platform and per-category breakdowns. Combines posts AND comments (see repository.PostRepository's Combined* methods), like /dashboard/overview — unlike /mentions, which is post-only. by_category is keyword-matched (service.ClassifyTopicSentiment), not a stored classification. The platform filter applies to everything except by_platform, which always reports every platform (filtering a per-platform breakdown down to one platform would defeat its purpose). summary.*.change is always "-" — period-over-period comparison isn't implemented. Response messages are localized via ?lang= or Accept-Language (id/en).
 // @Tags         sentiment
 // @Produce      json
 // @Security     BearerAuth
 // @Param        from   query     string  false  "Start date (YYYY-MM-DD, WIB) — omit for no lower bound"
 // @Param        to     query     string  false  "End date (YYYY-MM-DD, WIB, inclusive) — omit for no upper bound"
+// @Param        platform  query  string  false  "X, Instagram, TikTok, News, or YouTube — omit for all platforms"
 // @Success      200    {object}  response.Response
 // @Failure      400    {object}  response.ErrorResponse
 // @Router       /sentiment/overview [get]
@@ -182,8 +183,9 @@ func (h *SentimentHandler) GetOverview(c *gin.Context) {
 		response.BadRequest(c, i18n.T(lang, "validation.invalid_date"), err)
 		return
 	}
+	platform := platformsByDisplayName[query.Platform] // "" for "All Platforms" / unknown / empty
 
-	overview, err := h.sentimentSvc.GetOverview(c.Request.Context(), from, to)
+	overview, err := h.sentimentSvc.GetOverview(c.Request.Context(), from, to, string(platform))
 	if err != nil {
 		response.InternalServerError(c, i18n.T(lang, "sentiment.overview.get_failed"), err)
 		return
@@ -196,10 +198,13 @@ func (h *SentimentHandler) GetOverview(c *gin.Context) {
 	for i, b := range buckets {
 		bucketTotal := b.Positive + b.Neutral + b.Negative
 		trend[i] = TrendPoint{
-			Day:      b.Label,
-			Positive: percentOf(b.Positive, bucketTotal),
-			Neutral:  percentOf(b.Neutral, bucketTotal),
-			Negative: percentOf(b.Negative, bucketTotal),
+			Day:           b.Label,
+			Positive:      percentOf(b.Positive, bucketTotal),
+			Neutral:       percentOf(b.Neutral, bucketTotal),
+			Negative:      percentOf(b.Negative, bucketTotal),
+			PositiveCount: b.Positive,
+			NeutralCount:  b.Neutral,
+			NegativeCount: b.Negative,
 		}
 	}
 

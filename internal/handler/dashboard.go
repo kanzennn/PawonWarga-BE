@@ -74,11 +74,19 @@ type DashboardSummary struct {
 	Neutral       MetricValueResponse `json:"neutral"`
 }
 
+// TrendPoint backs both /dashboard/overview's "Sentiment Trend" chart and
+// /sentiment/overview's "Sentiment Over Time" chart — both support a
+// Percentage/Total toggle client-side, so every point carries both display
+// modes: Positive/Neutral/Negative is percentage share (0-100, sums to
+// ~100 per point), *Count is that same point's raw mention count.
 type TrendPoint struct {
-	Day      string `json:"day"`
-	Positive int    `json:"positive"`
-	Neutral  int    `json:"neutral"`
-	Negative int    `json:"negative"`
+	Day           string `json:"day"`
+	Positive      int    `json:"positive"`
+	Neutral       int    `json:"neutral"`
+	Negative      int    `json:"negative"`
+	PositiveCount int64  `json:"positive_count"`
+	NeutralCount  int64  `json:"neutral_count"`
+	NegativeCount int64  `json:"negative_count"`
 }
 
 type TopicSlice struct {
@@ -105,6 +113,8 @@ type SentimentDriverResponse struct {
 	Progress int    `json:"progress"`
 }
 
+// DataSourceStatus's Value is the platform's mention count (post+comment),
+// not engagement — same convention as PlatformVolumeItem.MentionCount.
 type DataSourceStatus struct {
 	Code   string `json:"code"`
 	Label  string `json:"label"`
@@ -180,12 +190,13 @@ func relativeTimeID(t time.Time) string {
 
 // GetOverview godoc
 // @Summary      Dashboard overview
-// @Description  Aggregated stats backing the main dashboard: headline, summary metrics, sentiment trend, per-platform volume, top keywords, topic distribution, and top sentiment drivers all combine posts AND comments (see repository.PostRepository's Combined* methods) — unlike /mentions, which is post-only. recent_mentions is the one exception and stays post-only (a bare comment has no url/location/category of its own). topic_distribution/keyword_cloud/drivers are keyword-matched, not a stored classification — see service.ClassifyTopics/computeDrivers. summary.*.change is always "-" — period-over-period comparison isn't implemented. Response messages are localized via ?lang= or Accept-Language (id/en).
+// @Description  Aggregated stats backing the main dashboard: headline, summary metrics, sentiment trend, per-platform volume, top keywords, topic distribution, and top sentiment drivers all combine posts AND comments (see repository.PostRepository's Combined* methods) — unlike /mentions, which is post-only. recent_mentions is the one exception and stays post-only (a bare comment has no url/location/category of its own). topic_distribution/keyword_cloud/drivers are keyword-matched, not a stored classification — see service.ClassifyTopics/computeDrivers. trend.positive/neutral/negative are each bucket's percentage share (0-100) and trend.*_count are that same bucket's raw mention counts — the frontend's Percentage/Total toggle switches between them (same shape as /sentiment/overview's trend). The platform filter applies to everything except data_sources, which always reports every platform's status regardless of the filter (it's a connectivity widget, not a filtered breakdown). summary.*.change is always "-" — period-over-period comparison isn't implemented. Response messages are localized via ?lang= or Accept-Language (id/en).
 // @Tags         dashboard
 // @Produce      json
 // @Security     BearerAuth
 // @Param        from   query     string  false  "Start date (YYYY-MM-DD, WIB) — omit for no lower bound"
 // @Param        to     query     string  false  "End date (YYYY-MM-DD, WIB, inclusive) — omit for no upper bound"
+// @Param        platform  query  string  false  "X, Instagram, TikTok, News, or YouTube — omit for all platforms"
 // @Success      200    {object}  response.Response
 // @Failure      400    {object}  response.ErrorResponse
 // @Router       /dashboard/overview [get]
@@ -202,8 +213,9 @@ func (h *DashboardHandler) GetOverview(c *gin.Context) {
 		response.BadRequest(c, i18n.T(lang, "validation.invalid_date"), err)
 		return
 	}
+	platform := platformsByDisplayName[query.Platform] // "" for "All Platforms" / unknown / empty
 
-	overview, err := h.dashboardSvc.GetOverview(c.Request.Context(), from, to)
+	overview, err := h.dashboardSvc.GetOverview(c.Request.Context(), from, to, string(platform))
 	if err != nil {
 		response.InternalServerError(c, i18n.T(lang, "dashboard.overview.get_failed"), err)
 		return
@@ -216,10 +228,13 @@ func (h *DashboardHandler) GetOverview(c *gin.Context) {
 	for i, b := range buckets {
 		bucketTotal := b.Positive + b.Neutral + b.Negative
 		trend[i] = TrendPoint{
-			Day:      b.Label,
-			Positive: percentOf(b.Positive, bucketTotal),
-			Neutral:  percentOf(b.Neutral, bucketTotal),
-			Negative: percentOf(b.Negative, bucketTotal),
+			Day:           b.Label,
+			Positive:      percentOf(b.Positive, bucketTotal),
+			Neutral:       percentOf(b.Neutral, bucketTotal),
+			Negative:      percentOf(b.Negative, bucketTotal),
+			PositiveCount: b.Positive,
+			NeutralCount:  b.Neutral,
+			NegativeCount: b.Negative,
 		}
 	}
 
@@ -274,7 +289,7 @@ func (h *DashboardHandler) GetOverview(c *gin.Context) {
 		dataSources = append(dataSources, DataSourceStatus{
 			Code:   platformShortCode[platformKey],
 			Label:  platformSourceLabel[platformKey],
-			Value:  formatCompact(row.Value),
+			Value:  formatCompact(row.Total),
 			Active: row.Total > 0,
 		})
 	}

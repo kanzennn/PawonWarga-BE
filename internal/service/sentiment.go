@@ -22,7 +22,7 @@ type SentimentOverview struct {
 }
 
 type SentimentService interface {
-	GetOverview(ctx context.Context, from, to *time.Time) (SentimentOverview, error)
+	GetOverview(ctx context.Context, from, to *time.Time, platform string) (SentimentOverview, error)
 }
 
 type sentimentService struct {
@@ -36,14 +36,17 @@ func NewSentimentService(postRepo repository.PostRepository) SentimentService {
 // GetOverview: from/to are nil when the topbar date-range picker is cleared
 // ("view without a date range") — every aggregate then covers all-time
 // (CombinedTrend still applies its own fallback lookback window in that
-// case — see its doc comment).
-func (s *sentimentService) GetOverview(ctx context.Context, from, to *time.Time) (SentimentOverview, error) {
-	agg, err := s.postRepo.CombinedAggregate(ctx, from, to)
+// case — see its doc comment). platform is "" when the topbar's platform
+// picker is cleared ("All Platforms"). PlatformVolume (backing the
+// "Sentiment by Platform" chart) deliberately ignores platform — see
+// CombinedPlatformVolume's doc comment on the repository interface.
+func (s *sentimentService) GetOverview(ctx context.Context, from, to *time.Time, platform string) (SentimentOverview, error) {
+	agg, err := s.postRepo.CombinedAggregate(ctx, from, to, platform)
 	if err != nil {
 		return SentimentOverview{}, err
 	}
 
-	trend, err := s.postRepo.CombinedTrend(ctx, from, to)
+	trend, err := s.postRepo.CombinedTrend(ctx, from, to, platform)
 	if err != nil {
 		return SentimentOverview{}, err
 	}
@@ -53,7 +56,7 @@ func (s *sentimentService) GetOverview(ctx context.Context, from, to *time.Time)
 		return SentimentOverview{}, err
 	}
 
-	contentRows, err := s.postRepo.CombinedContent(ctx, from, to)
+	contentRows, err := s.postRepo.CombinedContent(ctx, from, to, platform)
 	if err != nil {
 		return SentimentOverview{}, err
 	}

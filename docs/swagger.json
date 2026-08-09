@@ -337,7 +337,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Aggregated stats backing the main dashboard: headline, summary metrics, sentiment trend, per-platform volume, top keywords, topic distribution, and top sentiment drivers all combine posts AND comments (see repository.PostRepository's Combined* methods) — unlike /mentions, which is post-only. recent_mentions is the one exception and stays post-only (a bare comment has no url/location/category of its own). topic_distribution/keyword_cloud/drivers are keyword-matched, not a stored classification — see service.ClassifyTopics/computeDrivers. summary.*.change is always \"-\" — period-over-period comparison isn't implemented. Response messages are localized via ?lang= or Accept-Language (id/en).",
+                "description": "Aggregated stats backing the main dashboard: headline, summary metrics, sentiment trend, per-platform volume, top keywords, topic distribution, and top sentiment drivers all combine posts AND comments (see repository.PostRepository's Combined* methods) — unlike /mentions, which is post-only. recent_mentions is the one exception and stays post-only (a bare comment has no url/location/category of its own). topic_distribution/keyword_cloud/drivers are keyword-matched, not a stored classification — see service.ClassifyTopics/computeDrivers. trend.positive/neutral/negative are each bucket's percentage share (0-100) and trend.*_count are that same bucket's raw mention counts — the frontend's Percentage/Total toggle switches between them (same shape as /sentiment/overview's trend). The platform filter applies to everything except data_sources, which always reports every platform's status regardless of the filter (it's a connectivity widget, not a filtered breakdown). summary.*.change is always \"-\" — period-over-period comparison isn't implemented. Response messages are localized via ?lang= or Accept-Language (id/en).",
                 "produces": [
                     "application/json"
                 ],
@@ -356,6 +356,12 @@
                         "type": "string",
                         "description": "End date (YYYY-MM-DD, WIB, inclusive) — omit for no upper bound",
                         "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "X, Instagram, TikTok, News, or YouTube — omit for all platforms",
+                        "name": "platform",
                         "in": "query"
                     }
                 ],
@@ -488,6 +494,12 @@
                         "description": "End date (YYYY-MM-DD, WIB, inclusive) — omit for no upper bound",
                         "name": "to",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "X, Instagram, TikTok, News, or YouTube — omit for all platforms",
+                        "name": "platform",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -565,6 +577,12 @@
                         "description": "Items per page",
                         "name": "per_page",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "newest (default), oldest, or engagement",
+                        "name": "sort",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -623,6 +641,60 @@
                 }
             }
         },
+        "/mentions/{id}/comments": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Paginated labeled comments on a single post, oldest first. 404s if the post doesn't exist or hasn't been labeled yet — same check GetByID applies. Response messages are localized via ?lang= or Accept-Language (id/en).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mentions"
+                ],
+                "summary": "List comments for a mention",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Post ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page",
+                        "name": "per_page",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/sentiment/overview": {
             "get": {
                 "security": [
@@ -630,7 +702,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Aggregated sentiment stats backing the Sentiment Analysis page: score, summary metrics, distribution, trend, per-platform and per-category breakdowns. Combines posts AND comments (see repository.PostRepository's Combined* methods), like /dashboard/overview — unlike /mentions, which is post-only. by_category is keyword-matched (service.ClassifyTopicSentiment), not a stored classification. summary.*.change is always \"-\" — period-over-period comparison isn't implemented. Response messages are localized via ?lang= or Accept-Language (id/en).",
+                "description": "Aggregated sentiment stats backing the Sentiment Analysis page: score, summary metrics, distribution, trend, per-platform and per-category breakdowns. Combines posts AND comments (see repository.PostRepository's Combined* methods), like /dashboard/overview — unlike /mentions, which is post-only. by_category is keyword-matched (service.ClassifyTopicSentiment), not a stored classification. The platform filter applies to everything except by_platform, which always reports every platform (filtering a per-platform breakdown down to one platform would defeat its purpose). summary.*.change is always \"-\" — period-over-period comparison isn't implemented. Response messages are localized via ?lang= or Accept-Language (id/en).",
                 "produces": [
                     "application/json"
                 ],
@@ -649,6 +721,12 @@
                         "type": "string",
                         "description": "End date (YYYY-MM-DD, WIB, inclusive) — omit for no upper bound",
                         "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "X, Instagram, TikTok, News, or YouTube — omit for all platforms",
+                        "name": "platform",
                         "in": "query"
                     }
                 ],
