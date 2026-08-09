@@ -60,6 +60,8 @@ jobs:
           port: ${{ secrets.VPS_PORT }}         # optional — defaults to 22
           envs: IMAGE,CR_PAT,CR_USER
           script: |
+            set -e
+
             # Authenticate to ghcr.io from the VPS
             echo "$CR_PAT" | docker login ghcr.io -u "$CR_USER" --password-stdin
 
