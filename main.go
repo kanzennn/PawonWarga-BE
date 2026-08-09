@@ -6,7 +6,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"PawonWarga-BE/docs"
 	"PawonWarga-BE/internal/config"
 	"PawonWarga-BE/internal/server"
 )
@@ -27,7 +26,6 @@ import (
 // @description                Shared secret for the internal ingest routes (Python labeling worker)
 func main() {
 	cfg := config.Load()
-	docs.SwaggerInfo.Host = cfg.Server.SwaggerHost
 
 	srv, err := server.New(cfg)
 	if err != nil {

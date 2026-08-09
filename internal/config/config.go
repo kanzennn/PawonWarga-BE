@@ -24,7 +24,6 @@ type ServerConfig struct {
 	ReadTimeout     int
 	WriteTimeout    int
 	ShutdownTimeout int
-	SwaggerHost     string
 }
 
 type DatabaseConfig struct {
@@ -85,7 +84,6 @@ func Load() *Config {
 			ReadTimeout:     getEnvInt("SERVER_READ_TIMEOUT", 30),
 			WriteTimeout:    getEnvInt("SERVER_WRITE_TIMEOUT", 30),
 			ShutdownTimeout: getEnvInt("SERVER_SHUTDOWN_TIMEOUT", 5),
-			SwaggerHost:     getEnv("SWAGGER_HOST", "localhost:8080"),
 		},
 		Database: DatabaseConfig{
 			Host:     getEnv("DB_HOST", "localhost"),

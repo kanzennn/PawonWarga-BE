@@ -1,6 +1,7 @@
 package router
 
 import (
+	"PawonWarga-BE/docs"
 	"PawonWarga-BE/internal/config"
 	"PawonWarga-BE/internal/handler"
 	"PawonWarga-BE/internal/middleware"
@@ -74,8 +75,16 @@ func New(cfg *config.Config, db *gorm.DB, cacheClient *cache.Cache, stor storage
 }
 
 func (r *Router) Setup() *gin.Engine {
-	// Swagger UI
-	r.engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	// Swagger UI — SwaggerInfo.Host is set from the incoming request's Host
+	// header on every hit, so "Try it out" always targets whatever
+	// host:port/domain served this request (localhost:8080 in dev, the
+	// deployed domain in production) instead of a single value baked in at
+	// startup from an env var.
+	swaggerHandler := ginSwagger.WrapHandler(swaggerFiles.Handler)
+	r.engine.GET("/swagger/*any", func(c *gin.Context) {
+		docs.SwaggerInfo.Host = c.Request.Host
+		swaggerHandler(c)
+	})
 
 	// Health check
 	r.engine.GET("/health", handler.NewHealthHandler().Health)
