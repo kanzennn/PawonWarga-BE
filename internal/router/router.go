@@ -29,6 +29,7 @@ type Router struct {
 	dashboardHandler *handler.DashboardHandler
 	sentimentHandler *handler.SentimentHandler
 	keywordHandler   *handler.KeywordHandler
+	settingsHandler  *handler.SettingsHandler
 }
 
 func New(cfg *config.Config, db *gorm.DB, cacheClient *cache.Cache, stor storage.Storage) *Router {
@@ -59,6 +60,9 @@ func New(cfg *config.Config, db *gorm.DB, cacheClient *cache.Cache, stor storage
 	sentimentSvc := service.NewSentimentService(postRepo)
 	keywordSvc := service.NewKeywordService(postRepo)
 
+	settingsRepo := repository.NewSettingsRepository(db)
+	settingsSvc := service.NewSettingsService(settingsRepo, postRepo)
+
 	return &Router{
 		engine:           engine,
 		cfg:              cfg,
@@ -71,6 +75,7 @@ func New(cfg *config.Config, db *gorm.DB, cacheClient *cache.Cache, stor storage
 		dashboardHandler: handler.NewDashboardHandler(dashboardSvc),
 		sentimentHandler: handler.NewSentimentHandler(sentimentSvc),
 		keywordHandler:   handler.NewKeywordHandler(keywordSvc),
+		settingsHandler:  handler.NewSettingsHandler(settingsSvc),
 	}
 }
 
@@ -135,6 +140,20 @@ func (r *Router) Setup() *gin.Engine {
 	keywords.Use(middleware.JWTAuth(r.cfg.JWT.Secret, r.userRepo))
 	{
 		keywords.GET("", r.keywordHandler.List)
+	}
+
+	// Settings routes — JWT required
+	preferences := r.engine.Group("/api/v1/settings/preferences")
+	preferences.Use(middleware.JWTAuth(r.cfg.JWT.Secret, r.userRepo))
+	{
+		preferences.GET("", r.settingsHandler.GetPreferences)
+		preferences.PUT("", r.settingsHandler.UpdatePreference)
+	}
+
+	integrations := r.engine.Group("/api/v1/settings/integrations")
+	integrations.Use(middleware.JWTAuth(r.cfg.JWT.Secret, r.userRepo))
+	{
+		integrations.GET("", r.settingsHandler.GetIntegrations)
 	}
 
 	// Ingest routes — internal service-to-service, shared-secret API key

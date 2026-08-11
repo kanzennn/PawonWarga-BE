@@ -42,21 +42,21 @@ func bucketTrend(rows []repository.DailySentimentRow) []TrendBucket {
 	switch {
 	case spanDays <= maxTrendPoints:
 		keyFn = func(t time.Time) time.Time { return t }
-		labelFn = formatIndoDay
+		labelFn = formatDay
 	case spanDays <= maxTrendPoints*7:
 		keyFn = weekStart
 		labelFn = func(t time.Time) string {
 			end := t.AddDate(0, 0, 6)
 			if t.Month() == end.Month() {
-				return fmt.Sprintf("%d-%d %s", t.Day(), end.Day(), indoMonthAbbr[t.Month()])
+				return fmt.Sprintf("%d-%d %s", t.Day(), end.Day(), monthAbbr[t.Month()])
 			}
-			return fmt.Sprintf("%s - %s", formatIndoDay(t), formatIndoDay(end))
+			return fmt.Sprintf("%s - %s", formatDay(t), formatDay(end))
 		}
 	case spanDays <= maxTrendPoints*31:
 		keyFn = func(t time.Time) time.Time {
 			return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
 		}
-		labelFn = func(t time.Time) string { return fmt.Sprintf("%s %d", indoMonthAbbr[t.Month()], t.Year()) }
+		labelFn = func(t time.Time) string { return fmt.Sprintf("%s %d", monthAbbr[t.Month()], t.Year()) }
 	case spanDays <= maxTrendPoints*92:
 		keyFn = func(t time.Time) time.Time {
 			quarterMonth := time.Month((int(t.Month())-1)/3*3 + 1)

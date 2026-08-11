@@ -106,6 +106,15 @@ var messages = map[string]map[Lang]string{
 	// Keyword handler (internal/handler/keywords.go)
 	"keywords.list_ok":     {EN: "keywords retrieved", ID: "daftar keyword berhasil diambil"},
 	"keywords.list_failed": {EN: "failed to list keywords", ID: "gagal mengambil daftar keyword"},
+
+	// Settings handler (internal/handler/settings.go)
+	"settings.preferences.get_ok":        {EN: "preferences retrieved", ID: "preferensi berhasil diambil"},
+	"settings.preferences.get_failed":    {EN: "failed to get preferences", ID: "gagal mengambil preferensi"},
+	"settings.preferences.update_ok":     {EN: "preference updated", ID: "preferensi berhasil diperbarui"},
+	"settings.preferences.update_failed": {EN: "failed to update preference", ID: "gagal memperbarui preferensi"},
+	"settings.preferences.unknown_key":   {EN: "unknown preference key", ID: "kunci preferensi tidak dikenal"},
+	"settings.integrations.get_ok":       {EN: "integrations retrieved", ID: "daftar integrasi berhasil diambil"},
+	"settings.integrations.get_failed":   {EN: "failed to get integrations", ID: "gagal mengambil daftar integrasi"},
 }
 
 // T translates key into the given language, formatting it with args via

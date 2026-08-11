@@ -91,7 +91,9 @@ var platformsByDisplayName = func() map[string]model.Platform {
 // GET /mentions/{id} — shape fixed by pawonwarga-fe/docs/api-contract.md.
 // Location/Category are plain strings, not pointers — the frontend's Mention
 // type (lib/types.ts) declares them non-nullable, so a missing value must
-// serialize as "" rather than null.
+// serialize as "" rather than null. View/Like/Share are similarly "" (not
+// "0") when the source platform's scraper never captured that counter —
+// Mention Detail renders "" as "Not available" rather than a misleading 0.
 type MentionItem struct {
 	ID         uint   `json:"id"`
 	Platform   string `json:"platform"`
@@ -99,6 +101,9 @@ type MentionItem struct {
 	Text       string `json:"text"`
 	Sentiment  string `json:"sentiment"`
 	Engagement string `json:"engagement"`
+	View       string `json:"view"`
+	Like       string `json:"like"`
+	Share      string `json:"share"`
 	Time       string `json:"time"`
 	Location   string `json:"location"`
 	Category   string `json:"category"`
@@ -184,18 +189,18 @@ func formatCommentItem(comment model.Comment) CommentItem {
 	}
 }
 
-var indoMonthFull = [...]string{
-	"", "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-	"Juli", "Agustus", "September", "Oktober", "November", "Desember",
+var monthFull = [...]string{
+	"", "January", "February", "March", "April", "May", "June",
+	"July", "August", "September", "October", "November", "December",
 }
 
-// formatMentionTime renders "15 Juli 2025, 01:21" (WIB) — date and time
-// only. A full "Hari, 15 Juli 2025, 01:21" (with day name) was the initial
+// formatMentionTime renders "15 July 2025, 01:21" (WIB) — date and time
+// only. A full "Day, 15 July 2025, 01:21" (with day name) was the initial
 // ask, but that runs too long alongside platform/location/time in the
 // mention list row, so the day name is dropped.
 func formatMentionTime(t time.Time) string {
 	local := t.In(wib)
-	return fmt.Sprintf("%d %s %d, %s", local.Day(), indoMonthFull[local.Month()], local.Year(), local.Format("15:04"))
+	return fmt.Sprintf("%d %s %d, %s", local.Day(), monthFull[local.Month()], local.Year(), local.Format("15:04"))
 }
 
 // formatMentionItem maps a labeled model.Post onto the frontend's display
@@ -215,6 +220,19 @@ func formatMentionItem(post model.Post) MentionItem {
 	}
 
 	engagement := post.LikeCount + post.CommentCount + post.ShareCount
+
+	view := ""
+	if post.ViewCount > 0 {
+		view = formatCompact(int64(post.ViewCount))
+	}
+	like := ""
+	if post.LikeCount > 0 {
+		like = formatCompact(int64(post.LikeCount))
+	}
+	share := ""
+	if post.ShareCount > 0 {
+		share = formatCompact(int64(post.ShareCount))
+	}
 
 	location := ""
 	if post.Location != nil {
@@ -236,6 +254,9 @@ func formatMentionItem(post model.Post) MentionItem {
 		Text:       post.Content,
 		Sentiment:  string(sentiment),
 		Engagement: formatCompact(int64(engagement)),
+		View:       view,
+		Like:       like,
+		Share:      share,
 		Time:       formatMentionTime(post.PublishedAt),
 		Location:   location,
 		Category:   category,

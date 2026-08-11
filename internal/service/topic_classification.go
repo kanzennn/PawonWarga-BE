@@ -29,7 +29,7 @@ type topicDefinition struct {
 // taxonomy or LLM-based classifier is wanted instead.
 var topicDefinitions = []topicDefinition{
 	{
-		TopicCategory{"Kualitas & Keamanan Pangan", "#0c8a5f"},
+		TopicCategory{"Food Quality & Safety", "#0c8a5f"},
 		[]string{
 			"kualitas", "mutu", "higienis", "higiene", "kebersihan",
 			"keracunan", "basi", "busuk", "kadaluarsa", "kadaluwarsa",
@@ -37,7 +37,7 @@ var topicDefinitions = []topicDefinition{
 		},
 	},
 	{
-		TopicCategory{"Distribusi & Operasional Dapur", "#2f6f9e"},
+		TopicCategory{"Kitchen Distribution & Operations", "#2f6f9e"},
 		[]string{
 			"dapur", "sppg", "distribusi", "logistik", "pengiriman",
 			"memasak", "produksi", "operasional", "armada", "antar",
@@ -45,14 +45,14 @@ var topicDefinitions = []topicDefinition{
 		},
 	},
 	{
-		TopicCategory{"Manfaat Gizi", "#67c74a"},
+		TopicCategory{"Nutrition Benefits", "#67c74a"},
 		[]string{
 			"gizi", "nutrisi", "manfaat", "tumbuh", "kembang", "stunting",
 			"vitamin", "protein", "cerdas", "prestasi", "konsentrasi",
 		},
 	},
 	{
-		TopicCategory{"Kebijakan & Transparansi", "#f4b21b"},
+		TopicCategory{"Policy & Transparency", "#f4b21b"},
 		[]string{
 			"kebijakan", "transparansi", "anggaran", "bgn",
 			"badan gizi nasional", "regulasi", "program", "pemerintah",
@@ -60,7 +60,7 @@ var topicDefinitions = []topicDefinition{
 		},
 	},
 	{
-		TopicCategory{"Dugaan Penyimpangan", "#e54848"},
+		TopicCategory{"Alleged Misconduct", "#e54848"},
 		[]string{
 			"korupsi", "penyimpangan", "penyelewengan", "dugaan", "skandal",
 			"penyalahgunaan", "markup", "mark up", "suap", "oknum",
@@ -69,11 +69,11 @@ var topicDefinitions = []topicDefinition{
 	},
 }
 
-var otherTopic = TopicCategory{"Lainnya", "#9aa39c"}
+var otherTopic = TopicCategory{"Other", "#9aa39c"}
 
 // ClassifyTopic assigns content to whichever category has the most keyword
 // hits (case-insensitive substring match, ties favor the earlier-listed
-// category). Falls back to "Lainnya" if nothing matches.
+// category). Falls back to otherTopic if nothing matches.
 func ClassifyTopic(content string) TopicCategory {
 	lower := strings.ToLower(content)
 
@@ -102,7 +102,7 @@ type TopicCount struct {
 }
 
 // ClassifyTopics classifies every text and returns per-category counts in a
-// stable order (topicDefinitions' order, "Lainnya" last), omitting any
+// stable order (topicDefinitions' order, "Other" last), omitting any
 // category with zero matches so the donut doesn't carry empty slices.
 func ClassifyTopics(texts []string) []TopicCount {
 	counts := make(map[string]int, len(topicDefinitions)+1)
@@ -137,7 +137,7 @@ type CategorySentimentStat struct {
 }
 
 // ClassifyTopicSentiment groups rows by topic and tallies sentiment within
-// each. "Lainnya" is excluded — same rationale as computeDrivers, it's a
+// each. "Other" is excluded — same rationale as computeDrivers, it's a
 // catch-all bucket, not a theme worth charting.
 func ClassifyTopicSentiment(rows []repository.PostContentRow) []CategorySentimentStat {
 	tallies := make(map[string]*CategorySentimentStat)

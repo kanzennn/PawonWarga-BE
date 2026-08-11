@@ -51,9 +51,9 @@ var sentimentLabel = map[model.Sentiment]string{
 	model.SentimentNeutral:  "Neutral",
 }
 
-var indoMonthAbbr = [...]string{
-	"", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
-	"Jul", "Agu", "Sep", "Okt", "Nov", "Des",
+var monthAbbr = [...]string{
+	"", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 }
 
 type MetricValueResponse struct {
@@ -101,7 +101,7 @@ type WordCloudWordResponse struct {
 }
 
 // SentimentDriverResponse ranks a topic category by total engagement, with
-// its prevailing sentiment — see service.computeDrivers. "Lainnya" never
+// its prevailing sentiment — see service.computeDrivers. "Other" never
 // appears here (excluded as a non-theme catch-all). Value is the category's
 // mention count (formatted), not engagement — engagement only drives the
 // ranking order.
@@ -168,23 +168,22 @@ func formatPercent1(part, total int64) string {
 	return fmt.Sprintf("%.1f%%", float64(part)/float64(total)*100)
 }
 
-func formatIndoDay(t time.Time) string {
-	return fmt.Sprintf("%d %s", t.Day(), indoMonthAbbr[t.Month()])
+func formatDay(t time.Time) string {
+	return fmt.Sprintf("%d %s", t.Day(), monthAbbr[t.Month()])
 }
 
-// relativeTimeID renders a coarse Indonesian relative-time string, matching
-// the frontend contract's own example ("15 menit yang lalu").
-func relativeTimeID(t time.Time) string {
+// relativeTime renders a coarse relative-time string ("15 minutes ago").
+func relativeTime(t time.Time) string {
 	d := time.Since(t)
 	switch {
 	case d < time.Minute:
-		return "baru saja"
+		return "just now"
 	case d < time.Hour:
-		return fmt.Sprintf("%d menit yang lalu", int(d.Minutes()))
+		return fmt.Sprintf("%d minutes ago", int(d.Minutes()))
 	case d < 24*time.Hour:
-		return fmt.Sprintf("%d jam yang lalu", int(d.Hours()))
+		return fmt.Sprintf("%d hours ago", int(d.Hours()))
 	default:
-		return fmt.Sprintf("%d hari yang lalu", int(d.Hours()/24))
+		return fmt.Sprintf("%d days ago", int(d.Hours()/24))
 	}
 }
 
@@ -294,9 +293,9 @@ func (h *DashboardHandler) GetOverview(c *gin.Context) {
 		})
 	}
 
-	lastUpdated := "belum ada data"
+	lastUpdated := "no data yet"
 	if overview.LastUpdated != nil {
-		lastUpdated = relativeTimeID(*overview.LastUpdated)
+		lastUpdated = relativeTime(*overview.LastUpdated)
 	}
 
 	response.OK(c, i18n.T(lang, "dashboard.overview.get_ok"), DashboardOverviewResponse{

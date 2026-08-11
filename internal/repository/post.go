@@ -10,10 +10,6 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// trendFallbackDays is CombinedTrend's lookback window when the caller
-// gives no date range at all — see its doc comment.
-const trendFallbackDays = 14
-
 // PostFilter drives the query params the dashboard filters on
 // (platform, sentiment, category, free-text search, date range) plus pagination.
 type PostFilter struct {
@@ -387,16 +383,11 @@ func (r *postRepository) CombinedAggregate(ctx context.Context, from, to *time.T
 	return agg, err
 }
 
-// CombinedTrend falls back to a fixed lookback window only when the caller
-// gives no date range at all (from and to both nil) — matching the "no
-// date range" / all-time default elsewhere. An explicit range (even a
-// single-sided one) is used exactly as given, however long or short.
+// CombinedTrend returns one row per day with sentiment activity. When from
+// and to are both nil it covers true all-time, same as CombinedAggregate and
+// the other dashboard aggregates — an explicit range (even a single-sided
+// one) is used exactly as given, however long or short.
 func (r *postRepository) CombinedTrend(ctx context.Context, from, to *time.Time, platform string) ([]DailySentimentRow, error) {
-	if from == nil && to == nil {
-		since := time.Now().AddDate(0, 0, -trendFallbackDays)
-		from = &since
-	}
-
 	postClause, postArgs := dateRangeClause("published_at", from, to)
 	commentClause, commentArgs := dateRangeClause("c.published_at", from, to)
 	if platform != "" {

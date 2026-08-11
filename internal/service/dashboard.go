@@ -23,7 +23,7 @@ const topDriversLimit = 5
 
 // DriverStat is one topic category ranked as a "sentiment driver" — its
 // mention count (ranking metric and displayed value) and prevailing
-// sentiment. "Lainnya" is excluded (see computeDrivers) — it's a leftover
+// sentiment. "Other" is excluded (see computeDrivers) — it's a leftover
 // bucket, not a coherent theme.
 type DriverStat struct {
 	Category TopicCategory
@@ -69,8 +69,7 @@ func NewDashboardService(postRepo repository.PostRepository) DashboardService {
 //
 // from/to are nil when the frontend's topbar date-range picker is cleared
 // ("view without a date range") — every aggregate below then covers
-// all-time (CombinedTrend still applies its own fallback lookback window
-// in that case — see its doc comment). platform is "" when the topbar's
+// all-time. platform is "" when the topbar's
 // platform picker is cleared ("All Platforms"). PlatformVolume is the one
 // exception — it deliberately ignores platform (see CombinedPlatformVolume's
 // doc comment on the repository interface).
@@ -140,7 +139,7 @@ func (s *dashboardService) GetOverview(ctx context.Context, from, to *time.Time,
 
 // computeDrivers groups posts by topic category, counts mentions, and picks
 // each category's prevailing sentiment (ties favor positive, then negative,
-// then neutral). "Lainnya" is skipped — it's a catch-all bucket, not a
+// then neutral). "Other" is skipped — it's a catch-all bucket, not a
 // theme worth surfacing as a "driver". Ranked by mention count descending
 // (the theme people talk about most), capped at topDriversLimit.
 func computeDrivers(rows []repository.PostContentRow) []DriverStat {

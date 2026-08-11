@@ -29,7 +29,7 @@ func New(cfg *config.Config) (*Server, error) {
 		return nil, fmt.Errorf("database: %w", err)
 	}
 
-	if err := db.AutoMigrate(&model.User{}, &model.Post{}, &model.Comment{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.Post{}, &model.Comment{}, &model.UserPreference{}); err != nil {
 		return nil, fmt.Errorf("migration: %w", err)
 	}
 

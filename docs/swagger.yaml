@@ -135,6 +135,15 @@ definitions:
     - password
     - phone_number
     type: object
+  handler.UpdatePreferenceRequest:
+    properties:
+      checked:
+        type: boolean
+      key:
+        type: string
+    required:
+    - key
+    type: object
   handler.UpdateProfileRequest:
     properties:
       name:
@@ -712,6 +721,85 @@ paths:
       summary: Sentiment overview
       tags:
       - sentiment
+  /settings/integrations:
+    get:
+      description: Every monitored platform's read-only connectivity status plus its
+        live all-time mention count (posts+comments, never persisted so it can't go
+        stale). Status is Operational whenever at least one item has been ingested
+        for that platform — there is no manual override; once Argus exposes real crawler
+        health this should read that instead. Response messages are localized via
+        ?lang= or Accept-Language (id/en).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get data source integrations
+      tags:
+      - settings
+  /settings/preferences:
+    get:
+      description: Per-user notification toggles. title/desc come from a fixed backend
+        catalog (service.PreferenceCatalog) so copy can change without a frontend
+        redeploy — a user who has never touched a toggle gets the catalog default.
+        Response messages are localized via ?lang= or Accept-Language (id/en).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get monitoring preferences
+      tags:
+      - settings
+    put:
+      consumes:
+      - application/json
+      description: Flips one preference for the current user and returns the full
+        updated list, same shape as GET. key must be one of the keys GET /settings/preferences
+        returns.
+      parameters:
+      - description: Preference key and new checked state
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.UpdatePreferenceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a monitoring preference
+      tags:
+      - settings
 securityDefinitions:
   ApiKeyAuth:
     description: Shared secret for the internal ingest routes (Python labeling worker)
