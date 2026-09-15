@@ -30,6 +30,7 @@ var platformShortCode = map[model.Platform]string{
 	model.PlatformX:         "X",
 	model.PlatformInstagram: "IG",
 	model.PlatformTikTok:    "TT",
+	model.PlatformThreads:   "TH",
 	model.PlatformYouTube:   "YT",
 	model.PlatformNews:      "N",
 }
@@ -38,6 +39,7 @@ var platformSourceLabel = map[model.Platform]string{
 	model.PlatformX:         "X / Twitter",
 	model.PlatformInstagram: "Instagram",
 	model.PlatformTikTok:    "TikTok",
+	model.PlatformThreads:   "Threads",
 	model.PlatformYouTube:   "YouTube",
 	model.PlatformNews:      "News",
 }

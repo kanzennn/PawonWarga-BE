@@ -75,6 +75,7 @@ definitions:
         - x
         - instagram
         - tiktok
+        - threads
         - youtube
         - news
       platform_post_id:
@@ -161,6 +162,7 @@ definitions:
     - x
     - instagram
     - tiktok
+    - threads
     - youtube
     - news
     type: string
@@ -168,6 +170,7 @@ definitions:
     - PlatformX
     - PlatformInstagram
     - PlatformTikTok
+    - PlatformThreads
     - PlatformYouTube
     - PlatformNews
   model.Sentiment:

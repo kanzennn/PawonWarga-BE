@@ -34,7 +34,7 @@ type IngestCommentRequest struct {
 }
 
 type IngestPostRequest struct {
-	Platform       model.Platform `json:"platform" binding:"required,oneof=x instagram tiktok youtube news"`
+	Platform       model.Platform `json:"platform" binding:"required,oneof=x instagram tiktok threads youtube news"`
 	PlatformPostID string         `json:"platform_post_id" binding:"required"`
 	AuthorHandle   *string        `json:"author_handle"`
 	AuthorName     *string        `json:"author_name"`

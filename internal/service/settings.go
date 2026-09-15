@@ -17,6 +17,7 @@ var integrationPlatforms = []model.Platform{
 	model.PlatformX,
 	model.PlatformInstagram,
 	model.PlatformTikTok,
+	model.PlatformThreads,
 	model.PlatformNews,
 	model.PlatformYouTube,
 }

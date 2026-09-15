@@ -73,11 +73,12 @@ var platformDisplayNames = map[model.Platform]string{
 	model.PlatformX:         "X",
 	model.PlatformInstagram: "Instagram",
 	model.PlatformTikTok:    "TikTok",
+	model.PlatformThreads:   "Threads",
 	model.PlatformYouTube:   "YouTube",
 	model.PlatformNews:      "News",
 }
 
-var platformDisplayOrder = []string{"X", "Instagram", "TikTok", "News", "YouTube"}
+var platformDisplayOrder = []string{"X", "Instagram", "TikTok", "Threads", "News", "YouTube"}
 
 var platformsByDisplayName = func() map[string]model.Platform {
 	m := make(map[string]model.Platform, len(platformDisplayNames))

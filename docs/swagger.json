@@ -966,6 +966,7 @@
                         "x",
                         "instagram",
                         "tiktok",
+                        "threads",
                         "youtube",
                         "news"
                     ],
@@ -1091,6 +1092,7 @@
                 "x",
                 "instagram",
                 "tiktok",
+                "threads",
                 "youtube",
                 "news"
             ],
@@ -1098,6 +1100,7 @@
                 "PlatformX",
                 "PlatformInstagram",
                 "PlatformTikTok",
+                "PlatformThreads",
                 "PlatformYouTube",
                 "PlatformNews"
             ]

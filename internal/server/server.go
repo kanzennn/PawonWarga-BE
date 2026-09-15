@@ -40,6 +40,14 @@ func New(cfg *config.Config) (*Server, error) {
 		return nil, fmt.Errorf("hypertables: %w", err)
 	}
 
+	allowedPlatforms := make([]string, len(model.AllPlatforms))
+	for i, p := range model.AllPlatforms {
+		allowedPlatforms[i] = string(p)
+	}
+	if err := database.EnsurePlatformCheck(db, "posts", allowedPlatforms); err != nil {
+		return nil, fmt.Errorf("platform check: %w", err)
+	}
+
 	var cacheClient *cache.Cache
 	if cfg.Cache.Enabled {
 		cacheClient, err = cache.NewRedis(&cfg.Cache)

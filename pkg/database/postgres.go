@@ -207,6 +207,56 @@ func repairUniqueIndexes(db *gorm.DB, table, timeColumn string) error {
 	return nil
 }
 
+// EnsurePlatformCheck redefines table's `platform` CHECK constraint so it
+// allows exactly the values in allowed. AutoMigrate creates a CHECK matching
+// the model tag on a brand-new table, but — like the primary key/unique
+// index case repairUniqueIndexes handles — never widens an existing one when
+// the tag changes (e.g. a new platform added to model.Platform). Without
+// this, every insert for that platform would fail a constraint violation
+// that says nothing about which platform is missing. Safe to call on every
+// startup: it always redefines to the current list rather than diffing
+// against the existing definition, so it converges even if the constraint
+// was hand-edited or is missing values from more than one release.
+func EnsurePlatformCheck(db *gorm.DB, table string, allowed []string) error {
+	quoted := make([]string, len(allowed))
+	for i, v := range allowed {
+		quoted[i] = "'" + strings.ReplaceAll(v, "'", "''") + "'"
+	}
+	list := strings.Join(quoted, ",")
+
+	var conNames []string
+	err := db.Raw(`
+		SELECT con.conname
+		FROM pg_constraint con
+		JOIN pg_class rel ON rel.oid = con.conrelid
+		JOIN pg_namespace n ON n.oid = rel.relnamespace
+		WHERE con.contype = 'c'
+		  AND n.nspname = current_schema()
+		  AND rel.relname = ?
+		  AND pg_get_constraintdef(con.oid) ILIKE '%platform%'`, table).Scan(&conNames).Error
+	if err != nil {
+		return fmt.Errorf("detect platform check constraint on %s: %w", table, err)
+	}
+	// No existing CHECK on a brand-new table — AutoMigrate already created one
+	// matching the current model tag, nothing to repair.
+	if len(conNames) == 0 {
+		return nil
+	}
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		for _, name := range conNames {
+			if err := tx.Exec(fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT %s", quoteIdent(table), quoteIdent(name))).Error; err != nil {
+				return fmt.Errorf("drop %s: %w", name, err)
+			}
+		}
+		sql := fmt.Sprintf(
+			"ALTER TABLE %s ADD CONSTRAINT %s CHECK (platform IN (%s))",
+			quoteIdent(table), quoteIdent(table+"_platform_check"), list,
+		)
+		return tx.Exec(sql).Error
+	})
+}
+
 // quoteIdent double-quotes a Postgres identifier.
 func quoteIdent(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`

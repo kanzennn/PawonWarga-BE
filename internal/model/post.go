@@ -13,9 +13,24 @@ const (
 	PlatformX         Platform = "x"
 	PlatformInstagram Platform = "instagram"
 	PlatformTikTok    Platform = "tiktok"
+	PlatformThreads   Platform = "threads"
 	PlatformYouTube   Platform = "youtube"
 	PlatformNews      Platform = "news"
 )
+
+// AllPlatforms is every value Platform can take — the single source of truth
+// for the `posts.platform` CHECK constraint (see
+// pkg/database.EnsurePlatformCheck, called from server.go after AutoMigrate:
+// AutoMigrate never widens an existing CHECK when this list grows, so that
+// function repairs it on every startup instead).
+var AllPlatforms = []Platform{
+	PlatformX,
+	PlatformInstagram,
+	PlatformTikTok,
+	PlatformThreads,
+	PlatformYouTube,
+	PlatformNews,
+}
 
 type Sentiment string
 
@@ -44,7 +59,7 @@ const (
 // hasn't processed it yet (see repository.FindUnlabeled).
 type Post struct {
 	ID             uint            `gorm:"primaryKey;autoIncrement"                                                                                json:"id"`
-	Platform       Platform        `gorm:"size:20;not null;uniqueIndex:idx_posts_platform_post;check:platform IN ('x','instagram','tiktok','youtube','news')" json:"platform"`
+	Platform       Platform        `gorm:"size:20;not null;uniqueIndex:idx_posts_platform_post;check:platform IN ('x','instagram','tiktok','threads','youtube','news')" json:"platform"`
 	PlatformPostID string          `gorm:"size:255;not null;uniqueIndex:idx_posts_platform_post"                                                   json:"platform_post_id"`
 	AuthorHandle   *string         `gorm:"size:255"                                                                                                 json:"author_handle"`
 	AuthorName     *string         `gorm:"size:255"                                                                                                 json:"author_name"`

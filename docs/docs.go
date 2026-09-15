@@ -972,6 +972,7 @@ const docTemplate = `{
                         "x",
                         "instagram",
                         "tiktok",
+                        "threads",
                         "youtube",
                         "news"
                     ],
@@ -1097,6 +1098,7 @@ const docTemplate = `{
                 "x",
                 "instagram",
                 "tiktok",
+                "threads",
                 "youtube",
                 "news"
             ],
@@ -1104,6 +1106,7 @@ const docTemplate = `{
                 "PlatformX",
                 "PlatformInstagram",
                 "PlatformTikTok",
+                "PlatformThreads",
                 "PlatformYouTube",
                 "PlatformNews"
             ]
